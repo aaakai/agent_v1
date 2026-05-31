@@ -161,6 +161,7 @@ class RuntimeCoordinator:
                     "emotion",
                     "backchannel_opportunity",
                     "barge_in_score",
+                    "is_speaking",
                 )
                 if key in payload
             }
