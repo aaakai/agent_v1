@@ -8,6 +8,7 @@ from schemas.event_types import (
     ASR_PARTIAL,
     ASSISTANT_SPEECH_START,
     AUDIO_FEATURE_UPDATE,
+    SCENE_CHANGED,
     USER_SPEECH_END,
     USER_SPEECH_START,
 )
@@ -82,6 +83,21 @@ def simulate_sfx_trigger(session_id: str = "sim_sfx") -> list[Event]:
             payload={"text": "突然有人敲门"},
         ),
         Event(session_id=session_id, type=USER_SPEECH_END),
+    ]
+
+
+def simulate_scene_change(session_id: str = "sim_scene") -> list[Event]:
+    return [
+        Event(
+            session_id=session_id,
+            type=SCENE_CHANGED,
+            payload={
+                "name": "rainy_alley",
+                "mood": "tense",
+                "ambience": "rain_alley_loop",
+                "metadata": {"reverb": "wet_alley"},
+            },
+        )
     ]
 
 

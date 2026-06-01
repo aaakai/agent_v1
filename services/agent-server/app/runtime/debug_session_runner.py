@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from asr import ASRTrigger, MockASRAdapter
+from audio_runtime import AmbienceController
 from audio_input import (
     AudioFeatureExtractor,
     AudioFrame,
@@ -18,6 +19,7 @@ from schemas import Event
 from schemas.event_types import (
     ASSISTANT_SPEECH_START,
     AUDIO_FEATURE_UPDATE,
+    SCENE_CHANGED,
     USER_SPEECH_END,
 )
 
@@ -111,7 +113,17 @@ def result_to_json_dict(result: DebugSessionResult) -> dict[str, Any]:
 
 class DebugSessionRunner:
     DEFAULT_SESSION_ID = "debug_session"
-    SCENARIOS = {"backchannel", "danger", "factual", "bargein", "normal", "full"}
+    SCENARIOS = {
+        "ambience",
+        "backchannel",
+        "bargein",
+        "danger",
+        "factual",
+        "full",
+        "normal",
+        "scene",
+        "sfx",
+    }
 
     def __init__(
         self,
@@ -145,6 +157,22 @@ class DebugSessionRunner:
 
         for event in scenario.pre_events:
             decisions.extend(self.runtime_coordinator.process_event(event))
+
+        if "ambience_scene" in scenario.metadata:
+            controller = AmbienceController()
+            proposal = controller.ambience_for_scene(
+                session_id=scenario.session_id,
+                scene_name=scenario.metadata["ambience_scene"],
+            )
+            state = self.runtime_coordinator.get_session_state(scenario.session_id)
+            ambience_decision = self.runtime_coordinator.orchestrator.handle_output_proposal(
+                proposal,
+                state=state,
+            )
+            ambience_decision["proposal_action"] = proposal.action
+            ambience_decision["agent"] = proposal.agent
+            ambience_decision["session_id"] = scenario.session_id
+            decisions.append(ambience_decision)
 
         frames_processed = 0
         next_timestamp_ms = 1000
@@ -205,6 +233,12 @@ class DebugSessionRunner:
             return self._normal_scenario(active_session_id)
         if name == "full":
             return self._full_scenario(active_session_id)
+        if name == "sfx":
+            return self._sfx_scenario(active_session_id)
+        if name == "scene":
+            return self._scene_scenario(active_session_id)
+        if name == "ambience":
+            return self._ambience_scenario(active_session_id)
         raise ValueError(f"unknown debug scenario: {name}")
 
     def _ensure_default_consumers(self) -> None:
@@ -324,4 +358,53 @@ class DebugSessionRunner:
                     payload={"is_speaking": True, "barge_in_score": 0.9},
                 ),
             ],
+        )
+
+    def _sfx_scenario(self, session_id: str) -> DebugScenario:
+        return DebugScenario(
+            name="sfx",
+            session_id=session_id,
+            description="ASR final mentions a door knock and triggers a spatial SFX proposal.",
+            frames=[
+                DebugFrameSpec(
+                    timestamp_ms=1000,
+                    pcm_kind="speech",
+                    metadata={
+                        "asr_text": "突然有人敲门",
+                        "asr_final": True,
+                    },
+                )
+            ],
+            post_events=[
+                Event(session_id=session_id, type=USER_SPEECH_END),
+            ],
+        )
+
+    def _scene_scenario(self, session_id: str) -> DebugScenario:
+        return DebugScenario(
+            name="scene",
+            session_id=session_id,
+            description="Scene changes to rainy_alley and updates scene state.",
+            frames=[],
+            pre_events=[
+                Event(
+                    session_id=session_id,
+                    type=SCENE_CHANGED,
+                    payload={
+                        "name": "rainy_alley",
+                        "mood": "tense",
+                        "ambience": "rain_alley_loop",
+                        "metadata": {"reverb": "wet_alley"},
+                    },
+                )
+            ],
+        )
+
+    def _ambience_scenario(self, session_id: str) -> DebugScenario:
+        return DebugScenario(
+            name="ambience",
+            session_id=session_id,
+            description="Ambience controller creates a SET_AMBIENCE proposal.",
+            frames=[],
+            metadata={"ambience_scene": "rainy_alley"},
         )

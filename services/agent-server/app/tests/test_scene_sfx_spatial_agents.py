@@ -51,6 +51,7 @@ def test_sfx_planner_emits_play_sfx_for_knock_text() -> None:
         "asset_query": {
             "tags": ["door", "knock", "indoor"],
             "duration_ms": [300, 1200],
+            "intensity": 0.7,
         },
     }
     assert proposal.timing == {"start_after_ms": 300}
@@ -106,3 +107,20 @@ def test_spatial_audio_agent_leaves_non_sfx_proposal_unchanged() -> None:
 
     assert enhanced is proposal
     assert "spatial" not in enhanced.metadata
+
+
+def test_spatial_audio_agent_uses_scene_reverb() -> None:
+    agent = MockSpatialAudioAgent()
+    state = SessionState(session_id="session-1")
+    state.scene.name = "rainy_alley"
+    proposal = OutputProposal(
+        session_id="session-1",
+        agent="sfx_planner",
+        lane="sfx",
+        action="PLAY_SFX",
+        metadata={"event": "door_knock"},
+    )
+
+    enhanced = agent.enhance_sfx_proposal(proposal, state)
+
+    assert enhanced.metadata["spatial"]["reverb"] == "wet_alley"

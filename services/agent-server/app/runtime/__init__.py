@@ -6,6 +6,7 @@ from .simulator import (
     simulate_backchannel_opportunity,
     simulate_dangerous_interrupt,
     simulate_normal_dialogue,
+    simulate_scene_change,
     simulate_sfx_trigger,
     simulate_user_barge_in,
 )
@@ -20,6 +21,7 @@ __all__ = [
     "simulate_backchannel_opportunity",
     "simulate_dangerous_interrupt",
     "simulate_normal_dialogue",
+    "simulate_scene_change",
     "simulate_sfx_trigger",
     "simulate_user_barge_in",
     "summarize_latencies",

@@ -5,6 +5,7 @@ from runtime import (
     simulate_backchannel_opportunity,
     simulate_dangerous_interrupt,
     simulate_normal_dialogue,
+    simulate_scene_change,
     simulate_sfx_trigger,
     simulate_user_barge_in,
 )
@@ -60,3 +61,15 @@ def test_sfx_simulation_generates_sfx_lane_decision() -> None:
         and decision.get("lane") == "sfx"
         for decision in result["decisions"]
     )
+    state = result["sessions"]["sim_sfx"]["final_state"]
+    assert state["audio_runtime"]["sfx_playing"][0]["metadata"]["spatial"]["reverb"] == "small_room"
+
+
+def test_scene_change_simulation_updates_scene_state() -> None:
+    result = run_simulation(simulate_scene_change())
+
+    state = result["sessions"]["sim_scene"]["final_state"]
+    assert state["scene"]["name"] == "rainy_alley"
+    assert state["scene"]["mood"] == "tense"
+    assert state["scene"]["ambience"] == "rain_alley_loop"
+    assert state["scene"]["metadata"]["reverb"] == "wet_alley"

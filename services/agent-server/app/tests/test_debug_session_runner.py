@@ -162,6 +162,39 @@ def test_full_scenario_returns_json_serializable_summary() -> None:
     assert json.loads(json.dumps(json_dict, ensure_ascii=False))["scenario"] == "full"
 
 
+def test_sfx_scenario_generates_spatial_sfx_decision() -> None:
+    runner = DebugSessionRunner()
+
+    result = runner.run_scenario_sync(runner.build_scenario("sfx"))
+
+    assert result.decision_count > 0
+    assert any(decision.get("lane") == "sfx" for decision in result.decisions)
+    sfx = result.final_state["audio_runtime"]["sfx_playing"][0]
+    assert sfx["metadata"]["event"] == "door_knock"
+    assert "spatial" in sfx["metadata"]
+
+
+def test_scene_scenario_updates_scene_state() -> None:
+    runner = DebugSessionRunner()
+
+    result = runner.run_scenario_sync(runner.build_scenario("scene"))
+
+    assert result.final_state["scene"]["name"] == "rainy_alley"
+    assert result.final_state["scene"]["metadata"]["reverb"] == "wet_alley"
+
+
+def test_ambience_scenario_generates_ambience_decision() -> None:
+    runner = DebugSessionRunner()
+
+    result = runner.run_scenario_sync(runner.build_scenario("ambience"))
+
+    assert any(
+        decision.get("lane") == "ambience"
+        and decision.get("proposal_action") == "SET_AMBIENCE"
+        for decision in result.decisions
+    )
+
+
 def test_run_scenario_async() -> None:
     runner = DebugSessionRunner()
 

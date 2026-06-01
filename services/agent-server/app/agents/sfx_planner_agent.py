@@ -40,6 +40,7 @@ class MockSFXPlannerAgent(BaseAgent):
                 "asset_query": {
                     "tags": ["door", "knock", "indoor"],
                     "duration_ms": [300, 1200],
+                    "intensity": 0.7,
                 },
             },
         )

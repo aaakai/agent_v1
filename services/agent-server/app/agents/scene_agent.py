@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from presets import default_scene_preset
 from schemas import SessionState, StateUpdate
 
 from .base import AgentResult, BaseAgent
@@ -13,16 +14,17 @@ class MockSceneAgent(BaseAgent):
         if state.scene.name != "default":
             return self.empty_result()
 
+        preset = default_scene_preset()
         update = StateUpdate(
             session_id=state.session_id,
             agent=self.name,
             patch={
                 "scene": {
-                    "name": "office_meeting",
-                    "mood": "focused",
-                    "ambience": "office_room_tone",
+                    "name": preset.name,
+                    "mood": preset.mood,
+                    "ambience": preset.ambience,
                     "metadata": {
-                        "reverb": "small_room",
+                        "reverb": preset.reverb,
                     },
                 }
             },
