@@ -29,17 +29,21 @@ class RawAudioRouter:
         self.ring_buffer.append(frame)
         self.routed_count += 1
 
-        async def call_consumer(name: str, consumer: AudioConsumer) -> dict[str, str] | None:
+        async def call_consumer(name: str, consumer: AudioConsumer) -> dict[str, Any]:
             try:
                 if inspect.iscoroutinefunction(consumer):
                     result = consumer(frame)
                 else:
                     result = await asyncio.to_thread(consumer, frame)
                 if inspect.isawaitable(result):
-                    await result
+                    result = await result
             except Exception as exc:  # noqa: BLE001 - route must isolate consumers.
-                return {"consumer": name, "error": str(exc)}
-            return None
+                return {
+                    "name": name,
+                    "result": None,
+                    "error": {"consumer": name, "error": str(exc)},
+                }
+            return {"name": name, "result": result, "error": None}
 
         results = await asyncio.gather(
             *[
@@ -47,10 +51,19 @@ class RawAudioRouter:
                 for name, consumer in list(self.consumers.items())
             ]
         )
-        errors = [result for result in results if result is not None]
+        errors = [
+            result["error"]
+            for result in results
+            if result["error"] is not None
+        ]
+        consumer_results = {
+            result["name"]: result["result"]
+            for result in results
+        }
         return {
             "frame_id": frame.frame_id,
             "consumer_count": len(self.consumers),
+            "consumer_results": consumer_results,
             "errors": errors,
         }
 

@@ -99,3 +99,15 @@ def test_remove_consumer_stops_delivery() -> None:
     assert router.get_consumer_names() == []
     assert result["consumer_count"] == 0
     assert seen == []
+
+
+def test_route_preserves_consumer_results() -> None:
+    router = RawAudioRouter()
+    frame = AudioFrame(session_id="session-1")
+    decisions = [{"decision": "play", "lane": "speech"}]
+
+    router.add_consumer("decider", lambda received: decisions)
+
+    result = asyncio.run(router.route(frame))
+
+    assert result["consumer_results"] == {"decider": decisions}

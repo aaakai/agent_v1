@@ -45,3 +45,6 @@ def test_interrupt_followup_metadata_produces_higher_priority_dialogue() -> None
     assert proposal.action == "SPEAK"
     assert proposal.priority == 60
     assert proposal.text == "这个操作风险很高。我们先确认备份、影响范围和回滚方案。"
+    assert proposal.timing == {"start_when": "after_interrupt"}
+    assert proposal.metadata == {"followup": True}
+    assert result.state_updates[0].patch == {"metadata": {"followup_emitted": True}}

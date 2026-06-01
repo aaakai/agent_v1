@@ -82,6 +82,7 @@ class RuntimeCoordinator:
             decisions.append(decision)
 
         for action in control_actions:
+            state = self._apply_control_metadata(action, state)
             decision = self.orchestrator.handle_control_action(
                 action,
                 state=state,
@@ -170,6 +171,28 @@ class RuntimeCoordinator:
         if not patch:
             return self.session_state_manager.get_or_create(event.session_id)
         return self.session_state_manager.update(event.session_id, patch)
+
+    def _apply_control_metadata(
+        self,
+        action: ControlAction,
+        state: SessionState,
+    ) -> SessionState:
+        if (
+            action.action.upper() == "INTERRUPT_USER"
+            and action.payload.get("followup_needed") is True
+        ):
+            return self.session_state_manager.update(
+                state.session_id,
+                {
+                    "metadata": {
+                        "interrupt_reason": action.reason,
+                        "interrupt_phrase": action.payload.get("interrupt_phrase"),
+                        "followup_needed": True,
+                        "followup_emitted": False,
+                    }
+                },
+            )
+        return state
 
     def _run_agents(self, event: Event, state: SessionState) -> list[AgentResult]:
         results: list[AgentResult] = []

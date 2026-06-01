@@ -19,6 +19,10 @@ def test_barge_in_outputs_stop_speaking() -> None:
     assert action.priority == 95
     assert action.reason == "user_barge_in"
     assert action.target == "speech_lane"
+    assert action.payload == {
+        "audio_triggered": True,
+        "barge_in_score": 0.7,
+    }
 
 
 def test_dangerous_partial_outputs_interrupt_user() -> None:
@@ -33,11 +37,11 @@ def test_dangerous_partial_outputs_interrupt_user() -> None:
     assert action.priority == 95
     assert action.reason == "dangerous_operation"
     assert action.target == "user"
-    assert action.payload == {
-        "interrupt_phrase": "等一下，先别操作。",
-        "followup_needed": True,
-        "followup_policy": "dialogue_explain_if_user_pauses",
-    }
+    assert action.payload["semantic_triggered"] is True
+    assert action.payload["interrupt_phrase"] == "等一下，先别操作。"
+    assert action.payload["followup_needed"] is True
+    assert action.payload["followup_policy"] == "dialogue_explain_if_user_pauses"
+    assert action.payload["audio_context"]["is_speaking"] is False
 
 
 def test_obvious_factual_error_outputs_interrupt_user() -> None:
@@ -51,10 +55,9 @@ def test_obvious_factual_error_outputs_interrupt_user() -> None:
     assert action.action == "INTERRUPT_USER"
     assert action.priority == 85
     assert action.reason == "obvious_factual_error"
-    assert action.payload == {
-        "interrupt_phrase": "等一下，一加一是二。",
-        "followup_needed": False,
-    }
+    assert action.payload["semantic_triggered"] is True
+    assert action.payload["interrupt_phrase"] == "等一下，一加一是二。"
+    assert action.payload["followup_needed"] is False
 
 
 def test_normal_user_speech_outputs_allow_user_continue() -> None:

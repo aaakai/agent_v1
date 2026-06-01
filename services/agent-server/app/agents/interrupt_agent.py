@@ -28,10 +28,11 @@ class MockInterruptAgent(BaseAgent):
 
     def propose(self, state: SessionState) -> AgentResult:
         if (
-            state.assistant.is_speaking
+            (state.assistant.is_speaking or state.audio_runtime.speech_lane_busy)
             and state.user_audio.is_speaking
             and state.user_audio.barge_in_score >= 0.6
         ):
+            barge_in_score = state.user_audio.barge_in_score
             return AgentResult(
                 control_actions=[
                     ControlAction(
@@ -41,6 +42,10 @@ class MockInterruptAgent(BaseAgent):
                         priority=95,
                         reason="user_barge_in",
                         target="speech_lane",
+                        payload={
+                            "audio_triggered": True,
+                            "barge_in_score": barge_in_score,
+                        },
                     )
                 ],
                 metadata=self.make_metadata(trigger="user_barge_in"),
@@ -48,7 +53,10 @@ class MockInterruptAgent(BaseAgent):
 
         partial = state.asr.partial or ""
         normalized_partial = partial.lower()
-        if self._contains_keyword(partial, normalized_partial, DANGEROUS_KEYWORDS):
+        if (
+            self._contains_keyword(partial, normalized_partial, DANGEROUS_KEYWORDS)
+            and not self._dangerous_followup_already_tracked(state)
+        ):
             return AgentResult(
                 control_actions=[
                     ControlAction(
@@ -59,9 +67,11 @@ class MockInterruptAgent(BaseAgent):
                         reason="dangerous_operation",
                         target="user",
                         payload={
+                            "semantic_triggered": True,
                             "interrupt_phrase": "等一下，先别操作。",
                             "followup_needed": True,
                             "followup_policy": "dialogue_explain_if_user_pauses",
+                            "audio_context": self._audio_context(state),
                         },
                     )
                 ],
@@ -79,8 +89,10 @@ class MockInterruptAgent(BaseAgent):
                         reason="obvious_factual_error",
                         target="user",
                         payload={
+                            "semantic_triggered": True,
                             "interrupt_phrase": "等一下，一加一是二。",
                             "followup_needed": False,
+                            "audio_context": self._audio_context(state),
                         },
                     )
                 ],
@@ -112,4 +124,20 @@ class MockInterruptAgent(BaseAgent):
         return any(
             keyword in raw_text or keyword.lower() in normalized_text
             for keyword in keywords
+        )
+
+    def _audio_context(self, state: SessionState) -> dict:
+        return {
+            "is_speaking": state.user_audio.is_speaking,
+            "energy": state.user_audio.energy,
+            "pause_ms": state.user_audio.pause_ms,
+            "barge_in_score": state.user_audio.barge_in_score,
+            "assistant_speaking": state.assistant.is_speaking,
+            "speech_lane_busy": state.audio_runtime.speech_lane_busy,
+        }
+
+    def _dangerous_followup_already_tracked(self, state: SessionState) -> bool:
+        return (
+            state.metadata.get("interrupt_reason") == "dangerous_operation"
+            and state.metadata.get("followup_needed") is True
         )
