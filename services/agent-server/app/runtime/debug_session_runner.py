@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from asr import ASRTrigger, MockASRAdapter
-from audio_runtime import AmbienceController
+from audio_runtime import AmbienceController, CommandRecorder, commands_to_dict
 from audio_input import (
     AudioFeatureExtractor,
     AudioFrame,
@@ -52,6 +52,7 @@ class DebugSessionResult(BaseModel):
     event_count: int
     decision_count: int
     decisions: list[dict[str, Any]]
+    player_commands: list[dict[str, Any]] = Field(default_factory=list)
     final_state: dict[str, Any]
     errors: list[dict[str, Any]]
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -132,10 +133,12 @@ class DebugSessionRunner:
         backchannel_trigger: BackchannelTrigger | None = None,
         asr_trigger: ASRTrigger | None = None,
         asr_adapter: MockASRAdapter | None = None,
+        command_recorder: CommandRecorder | None = None,
     ) -> None:
         self.runtime_coordinator = runtime_coordinator or RuntimeCoordinator()
         self.raw_audio_router = raw_audio_router or RawAudioRouter()
         self.asr_adapter = asr_adapter or MockASRAdapter()
+        self.command_recorder = command_recorder or CommandRecorder()
         self.backchannel_trigger = backchannel_trigger or BackchannelTrigger(
             session_id=self.DEFAULT_SESSION_ID,
             runtime_coordinator=self.runtime_coordinator,
@@ -152,11 +155,20 @@ class DebugSessionRunner:
 
     async def run_scenario(self, scenario: DebugScenario) -> DebugSessionResult:
         decisions: list[dict[str, Any]] = []
+        player_commands: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
         route_summaries: list[dict[str, Any]] = []
+        self.command_recorder.clear()
+
+        async def collect(batch: list[dict[str, Any]]) -> None:
+            if not batch:
+                return
+            decisions.extend(batch)
+            commands = await self.command_recorder.record_decisions(batch)
+            player_commands.extend(commands_to_dict(commands))
 
         for event in scenario.pre_events:
-            decisions.extend(self.runtime_coordinator.process_event(event))
+            await collect(self.runtime_coordinator.process_event(event))
 
         if "ambience_scene" in scenario.metadata:
             controller = AmbienceController()
@@ -172,7 +184,8 @@ class DebugSessionRunner:
             ambience_decision["proposal_action"] = proposal.action
             ambience_decision["agent"] = proposal.agent
             ambience_decision["session_id"] = scenario.session_id
-            decisions.append(ambience_decision)
+            ambience_decision["proposal"] = proposal.model_dump(mode="python")
+            await collect([ambience_decision])
 
         frames_processed = 0
         next_timestamp_ms = 1000
@@ -184,13 +197,13 @@ class DebugSessionRunner:
             )
             route_summary = await self.raw_audio_router.route(frame)
             route_summaries.append(route_summary)
-            decisions.extend(flatten_decisions_from_route_summary(route_summary))
+            await collect(flatten_decisions_from_route_summary(route_summary))
             errors.extend(route_summary.get("errors", []))
             frames_processed += 1
             next_timestamp_ms = frame.timestamp_ms + spec.duration_ms
 
         for event in scenario.post_events:
-            decisions.extend(self.runtime_coordinator.process_event(event))
+            await collect(self.runtime_coordinator.process_event(event))
 
         final_state = self.runtime_coordinator.get_session_state(scenario.session_id)
         return DebugSessionResult(
@@ -200,6 +213,7 @@ class DebugSessionRunner:
             event_count=len(final_state.events),
             decision_count=len(decisions),
             decisions=decisions,
+            player_commands=player_commands,
             final_state=final_state.model_dump(mode="python"),
             errors=errors,
             metadata={

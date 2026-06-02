@@ -78,6 +78,7 @@ class RuntimeCoordinator:
                 )
                 decision["proposal_action"] = proposal.action
                 decision["agent"] = proposal.agent
+            decision.setdefault("proposal", proposal.model_dump(mode="python"))
             self._annotate_decision(decision, normalized)
             decisions.append(decision)
 

@@ -27,6 +27,15 @@ def test_debug_session_cli_runs_sfx_and_scene(capsys) -> None:
     assert scene_payload["final_state"]["scene"]["name"] == "rainy_alley"
 
 
+def test_debug_session_cli_commands_only(capsys) -> None:
+    exit_code = debug_session_runner.main(["sfx", "--commands-only"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert isinstance(payload, list)
+    assert any(command["type"] == "PLAY_SFX" for command in payload)
+
+
 def test_debug_session_cli_rejects_unknown_scenario(capsys) -> None:
     exit_code = debug_session_runner.main(["missing"])
 
