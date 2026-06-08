@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lulula LiveKit Debug</title>
+    <link rel="stylesheet" href="/static/livekit_debug.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>LiveKit Debug</h1>
+        <p>Connect a browser microphone to a LiveKit room and watch backend debug state.</p>
+      </div>
+      <a href="/debug">Back to runtime debug</a>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h2>Connection</h2>
+        <label>
+          LiveKit URL
+          <input id="livekitUrlInput" placeholder="wss://xxx.livekit.cloud" />
+        </label>
+        <label>
+          Room
+          <input id="roomInput" value="lulula-dev-room" />
+        </label>
+        <label>
+          Identity
+          <input id="identityInput" value="user-debug-1" />
+        </label>
+        <label>
+          Name
+          <input id="nameInput" value="Debug User" />
+        </label>
+        <label class="check">
+          <input id="allowMockTokenCheckbox" type="checkbox" />
+          allow mock token for local UI testing
+        </label>
+        <div class="actions">
+          <button id="connectButton" type="button">Connect</button>
+          <button id="disconnectButton" type="button">Disconnect</button>
+          <button id="publishMicButton" type="button">Publish microphone</button>
+          <button id="refreshStateButton" type="button">Refresh state</button>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <h2>Status</h2>
+          <pre id="statusBox">Loading config...</pre>
+        </article>
+        <article class="panel">
+          <h2>Backend Debug State</h2>
+          <pre id="backendStateBox">{}</pre>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h2>Logs</h2>
+        <div id="logsBox" class="logs"></div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
+    <script src="/static/livekit_debug.js"></script>
+  </body>
+</html>

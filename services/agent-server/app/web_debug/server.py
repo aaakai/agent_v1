@@ -14,6 +14,12 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 from web_debug.api import list_scenarios, run_debug_scenario  # noqa: E402
+from web_debug.livekit_api import (  # noqa: E402
+    create_debug_token,
+    get_debug_state,
+    get_livekit_config_status,
+    reset_debug_state,
+)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -51,9 +57,35 @@ def create_app() -> Any:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @app.get("/api/livekit/config")
+    def livekit_config() -> dict[str, Any]:
+        return get_livekit_config_status()
+
+    @app.post("/api/livekit/token")
+    def livekit_token(body: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return create_debug_token(
+                body,
+                allow_mock=bool(body.get("allow_mock", False)),
+            )
+        except (RuntimeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.get("/api/livekit/state")
+    def livekit_state() -> dict[str, Any]:
+        return get_debug_state()
+
+    @app.post("/api/livekit/reset")
+    def livekit_reset() -> dict[str, Any]:
+        return reset_debug_state()
+
     @app.get("/debug")
     def debug_panel() -> Any:
         return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
+
+    @app.get("/livekit-debug")
+    def livekit_debug_panel() -> Any:
+        return FileResponse(STATIC_DIR / "livekit_debug.html", media_type="text/html")
 
     @app.get("/static/app.js")
     def app_js() -> Any:
@@ -62,6 +94,17 @@ def create_app() -> Any:
     @app.get("/static/style.css")
     def style_css() -> Any:
         return FileResponse(STATIC_DIR / "style.css", media_type="text/css")
+
+    @app.get("/static/livekit_debug.js")
+    def livekit_debug_js() -> Any:
+        return FileResponse(
+            STATIC_DIR / "livekit_debug.js",
+            media_type="text/javascript",
+        )
+
+    @app.get("/static/livekit_debug.css")
+    def livekit_debug_css() -> Any:
+        return FileResponse(STATIC_DIR / "livekit_debug.css", media_type="text/css")
 
     return app
 
@@ -104,8 +147,20 @@ class _FallbackHandler(BaseHTTPRequestHandler):
         if path == "/api/scenarios":
             self._send_json(list_scenarios())
             return
+        if path == "/api/livekit/config":
+            self._send_json(get_livekit_config_status())
+            return
+        if path == "/api/livekit/state":
+            self._send_json(get_debug_state())
+            return
         if path == "/debug":
             self._send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+            return
+        if path == "/livekit-debug":
+            self._send_file(
+                STATIC_DIR / "livekit_debug.html",
+                "text/html; charset=utf-8",
+            )
             return
         if path == "/static/app.js":
             self._send_file(STATIC_DIR / "app.js", "text/javascript; charset=utf-8")
@@ -113,11 +168,27 @@ class _FallbackHandler(BaseHTTPRequestHandler):
         if path == "/static/style.css":
             self._send_file(STATIC_DIR / "style.css", "text/css; charset=utf-8")
             return
+        if path == "/static/livekit_debug.js":
+            self._send_file(
+                STATIC_DIR / "livekit_debug.js",
+                "text/javascript; charset=utf-8",
+            )
+            return
+        if path == "/static/livekit_debug.css":
+            self._send_file(
+                STATIC_DIR / "livekit_debug.css",
+                "text/css; charset=utf-8",
+            )
+            return
         self._send_error(HTTPStatus.NOT_FOUND, "not found")
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib hook name.
         path = urlparse(self.path).path
-        if path != "/api/run-scenario":
+        if path == "/api/livekit/reset":
+            self._send_json(reset_debug_state())
+            return
+
+        if path not in {"/api/run-scenario", "/api/livekit/token"}:
             self._send_error(HTTPStatus.NOT_FOUND, "not found")
             return
 
@@ -125,11 +196,17 @@ class _FallbackHandler(BaseHTTPRequestHandler):
             length = int(self.headers.get("content-length", "0"))
             body = self.rfile.read(length).decode("utf-8") if length else "{}"
             payload = json.loads(body)
-            data = run_debug_scenario(
-                scenario=str(payload.get("scenario", "full")),
-                with_player=bool(payload.get("with_player", True)),
-            )
-        except ValueError as exc:
+            if path == "/api/run-scenario":
+                data = run_debug_scenario(
+                    scenario=str(payload.get("scenario", "full")),
+                    with_player=bool(payload.get("with_player", True)),
+                )
+            else:
+                data = create_debug_token(
+                    payload,
+                    allow_mock=bool(payload.get("allow_mock", False)),
+                )
+        except (RuntimeError, ValueError) as exc:
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
             return
         except json.JSONDecodeError:

@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from audio_input import AudioFrame, RawAudioRouter
-from livekit import LiveKitConfig, LiveKitRoomHandler, MockAudioTrackReader
+from livekit import LiveKitConfig, LiveKitDebugState, LiveKitRoomHandler, MockAudioTrackReader
 from runtime import RuntimeCoordinator
 from schemas.event_types import USER_AUDIO_FRAME
 
@@ -33,6 +33,29 @@ def test_room_handler_processes_mock_audio_reader() -> None:
     state = coordinator.get_session_state("session-1")
     assert len(state.events) == 2
     assert [event.type for event in state.events] == [USER_AUDIO_FRAME, USER_AUDIO_FRAME]
+
+
+def test_room_handler_updates_livekit_debug_state() -> None:
+    frames = [
+        AudioFrame(session_id="session-1", frame_id="frame-1"),
+        AudioFrame(session_id="session-1", frame_id="frame-2"),
+    ]
+    debug_state = LiveKitDebugState()
+    seen: list[str] = []
+    router = RawAudioRouter()
+    router.add_consumer("seen", lambda frame: seen.append(frame.frame_id))
+    handler = LiveKitRoomHandler(
+        config=LiveKitConfig(),
+        raw_audio_router=router,
+        debug_state=debug_state,
+    )
+
+    result = asyncio.run(handler.handle_audio_reader(MockAudioTrackReader(frames)))
+
+    assert result["frames_processed"] == 2
+    assert seen == ["frame-1", "frame-2"]
+    assert debug_state.frames_received == 2
+    assert debug_state.events[-1].type == "frame_received"
 
 
 def test_room_handler_collects_route_errors() -> None:

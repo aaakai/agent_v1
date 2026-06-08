@@ -27,9 +27,12 @@ def test_tool_web_debug_server_help_returns_zero(capsys) -> None:
     assert "--port" in captured.out
 
 
-def test_fastapi_routes_if_available() -> None:
+def test_fastapi_routes_if_available(monkeypatch) -> None:
     pytest.importorskip("fastapi")
     testclient = pytest.importorskip("fastapi.testclient")
+    monkeypatch.setenv("LIVEKIT_URL", "wss://example.livekit.cloud")
+    monkeypatch.setenv("LIVEKIT_API_KEY", "key")
+    monkeypatch.setenv("LIVEKIT_API_SECRET", "secret")
 
     client = testclient.TestClient(server.create_app())
 
@@ -58,3 +61,26 @@ def test_fastapi_routes_if_available() -> None:
     style_css = client.get("/static/style.css")
     assert style_css.status_code == 200
     assert "body" in style_css.text
+
+    config = client.get("/api/livekit/config")
+    assert config.status_code == 200
+    assert config.json()["safe_config"]["api_secret"] == "***"
+
+    token = client.post(
+        "/api/livekit/token",
+        json={"room_name": "room", "identity": "user", "allow_mock": True},
+    )
+    assert token.status_code == 200
+    assert token.json()["token"]
+    assert "secret" not in str(token.json())
+
+    state = client.get("/api/livekit/state")
+    assert state.status_code == 200
+    assert "frames_received" in state.json()
+
+    reset = client.post("/api/livekit/reset")
+    assert reset.status_code == 200
+
+    livekit_debug = client.get("/livekit-debug")
+    assert livekit_debug.status_code == 200
+    assert "LiveKit Debug" in livekit_debug.text

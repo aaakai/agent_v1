@@ -34,3 +34,16 @@ class LiveKitConfig(BaseModel):
         if not self.api_secret:
             missing.append("api_secret")
         return missing
+
+    def default_room_name(self) -> str:
+        return self.room_name or "lulula-dev-room"
+
+    def to_safe_dict(self) -> dict[str, str | None | bool]:
+        return {
+            "url": self.url,
+            "api_key": self.api_key,
+            "api_secret": "***" if self.api_secret else None,
+            "room_name": self.default_room_name(),
+            "agent_identity": self.agent_identity or "lulula-agent",
+            "configured": self.is_configured(),
+        }

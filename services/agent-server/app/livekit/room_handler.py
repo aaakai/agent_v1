@@ -10,6 +10,7 @@ from schemas.event_types import USER_AUDIO_FRAME
 from .audio_track_publisher import BaseAudioTrackPublisher
 from .audio_track_reader import BaseAudioTrackReader
 from .config import LiveKitConfig
+from .debug_state import LiveKitDebugState
 
 
 class LiveKitRoomHandler:
@@ -19,11 +20,13 @@ class LiveKitRoomHandler:
         raw_audio_router: RawAudioRouter | None = None,
         runtime_coordinator: RuntimeCoordinator | None = None,
         publisher: BaseAudioTrackPublisher | None = None,
+        debug_state: LiveKitDebugState | None = None,
     ) -> None:
         self.config = config
         self.raw_audio_router = raw_audio_router or RawAudioRouter()
         self.runtime_coordinator = runtime_coordinator or RuntimeCoordinator()
         self.publisher = publisher
+        self.debug_state = debug_state or LiveKitDebugState()
 
     async def handle_audio_reader(
         self,
@@ -36,6 +39,15 @@ class LiveKitRoomHandler:
             route_result = await self.raw_audio_router.route(frame)
             errors.extend(route_result["errors"])
             frames_processed += 1
+            self.debug_state.mark_frame_received(
+                frame.timestamp_ms,
+                metadata={
+                    "frame_id": frame.frame_id,
+                    "duration_ms": frame.duration_ms,
+                    "sample_rate": frame.sample_rate,
+                    "channels": frame.channels,
+                },
+            )
             self.runtime_coordinator.process_event(
                 Event(
                     session_id=frame.session_id,

@@ -33,3 +33,16 @@ def test_config_from_env_reads_complete_config(monkeypatch) -> None:
     assert config.api_secret == "secret"
     assert config.room_name == "room-1"
     assert config.agent_identity == "agent-1"
+
+
+def test_config_safe_dict_masks_secret_and_defaults_room(monkeypatch) -> None:
+    monkeypatch.setenv("LIVEKIT_URL", "wss://example.livekit.cloud")
+    monkeypatch.setenv("LIVEKIT_API_KEY", "key")
+    monkeypatch.setenv("LIVEKIT_API_SECRET", "super-secret")
+    monkeypatch.delenv("LIVEKIT_ROOM", raising=False)
+
+    safe = LiveKitConfig.from_env().to_safe_dict()
+
+    assert safe["api_secret"] == "***"
+    assert "super-secret" not in str(safe)
+    assert safe["room_name"] == "lulula-dev-room"
