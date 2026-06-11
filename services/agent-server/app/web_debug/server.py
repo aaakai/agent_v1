@@ -16,9 +16,12 @@ if str(APP_DIR) not in sys.path:
 from web_debug.api import list_scenarios, run_debug_scenario  # noqa: E402
 from web_debug.livekit_api import (  # noqa: E402
     create_debug_token,
+    get_asr_config_status,
     get_debug_state,
     get_livekit_config_status,
+    get_worker_status,
     reset_debug_state,
+    reset_worker_state,
 )
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -78,6 +81,18 @@ def create_app() -> Any:
     @app.post("/api/livekit/reset")
     def livekit_reset() -> dict[str, Any]:
         return reset_debug_state()
+
+    @app.get("/api/livekit/worker-status")
+    def livekit_worker_status() -> dict[str, Any]:
+        return get_worker_status()
+
+    @app.post("/api/livekit/worker-reset")
+    def livekit_worker_reset() -> dict[str, Any]:
+        return reset_worker_state()
+
+    @app.get("/api/asr/config")
+    def asr_config() -> dict[str, Any]:
+        return get_asr_config_status()
 
     @app.get("/debug")
     def debug_panel() -> Any:
@@ -153,6 +168,12 @@ class _FallbackHandler(BaseHTTPRequestHandler):
         if path == "/api/livekit/state":
             self._send_json(get_debug_state())
             return
+        if path == "/api/livekit/worker-status":
+            self._send_json(get_worker_status())
+            return
+        if path == "/api/asr/config":
+            self._send_json(get_asr_config_status())
+            return
         if path == "/debug":
             self._send_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
             return
@@ -186,6 +207,9 @@ class _FallbackHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/livekit/reset":
             self._send_json(reset_debug_state())
+            return
+        if path == "/api/livekit/worker-reset":
+            self._send_json(reset_worker_state())
             return
 
         if path not in {"/api/run-scenario", "/api/livekit/token"}:

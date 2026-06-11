@@ -43,17 +43,34 @@
           <button id="disconnectButton" type="button">Disconnect</button>
           <button id="publishMicButton" type="button">Publish microphone</button>
           <button id="refreshStateButton" type="button">Refresh state</button>
+          <button id="refreshWorkerStatusButton" type="button">Refresh worker status</button>
+          <button id="resetWorkerStatusButton" type="button">Reset worker status</button>
         </div>
+        <p class="hint">
+          Backend worker 需要单独启动：
+          <code>python services/agent-server/app/tools/livekit_worker.py --room &lt;room&gt;</code>
+        </p>
       </section>
 
       <section class="grid">
         <article class="panel">
-          <h2>Status</h2>
+          <h2>Browser / Token Status</h2>
           <pre id="statusBox">Loading config...</pre>
         </article>
         <article class="panel">
           <h2>Backend Debug State</h2>
           <pre id="backendStateBox">{}</pre>
+        </article>
+        <article class="panel worker-card">
+          <h2>Backend Worker Status</h2>
+          <div class="worker-summary" id="workerSummaryBox">Waiting for worker status...</div>
+          <pre id="workerStatusBox">{}</pre>
+        </article>
+        <article class="panel worker-card">
+          <h2>ASR Provider Status</h2>
+          <p class="hint">OpenAI provider 当前使用 chunked final transcription，不是 realtime partial。</p>
+          <div class="worker-summary" id="asrSummaryBox">Loading ASR config...</div>
+          <pre id="asrStatusBox">{}</pre>
         </article>
       </section>
 

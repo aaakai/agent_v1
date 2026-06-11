@@ -24,3 +24,16 @@ def test_debug_state_records_connection_frames_and_reset() -> None:
     state.reset()
     assert state.snapshot()["frames_received"] == 0
     assert state.snapshot()["events"] == []
+
+
+def test_debug_state_records_asr_status_and_error_without_secret() -> None:
+    state = LiveKitDebugState()
+
+    state.update_asr_status({"provider": "mock", "api_key": "secret-value"})
+    state.record_asr_error("asr failed", metadata={"api_secret": "secret-value"})
+
+    snapshot = state.snapshot()
+    assert snapshot["asr"]["provider"] == "mock"
+    assert snapshot["asr"]["api_key"] == "***"
+    assert snapshot["asr"]["last_error"] == "asr failed"
+    assert "secret-value" not in str(snapshot)

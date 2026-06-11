@@ -74,6 +74,54 @@ def test_room_handler_collects_route_errors() -> None:
     assert result["errors"] == [{"consumer": "bad", "error": "bad frame"}]
 
 
+def test_room_handler_start_reader_task_processes_frames() -> None:
+    async def run() -> None:
+        frame = AudioFrame(session_id="session-1", frame_id="frame-1")
+        handler = LiveKitRoomHandler(config=LiveKitConfig())
+        task = handler.start_reader_task(MockAudioTrackReader([frame]), track_id="track-1")
+        result = await task
+
+        assert result["frames_processed"] == 1
+        assert handler.frames_processed_total == 1
+        assert "track-1" not in handler.active_reader_tasks
+
+    asyncio.run(run())
+
+
+def test_room_handler_reader_error_is_recorded() -> None:
+    class BrokenReader(MockAudioTrackReader):
+        async def read_frames(self):
+            raise RuntimeError("reader failed")
+            if False:
+                yield AudioFrame(session_id="session-1")
+
+    debug_state = LiveKitDebugState()
+    handler = LiveKitRoomHandler(config=LiveKitConfig(), debug_state=debug_state)
+
+    result = asyncio.run(handler.handle_audio_reader(BrokenReader([])))
+
+    assert result["frames_processed"] == 0
+    assert result["errors"] == [{"error": "reader failed"}]
+    assert debug_state.events[-1].type == "reader_error"
+
+
+def test_room_handler_stop_all_reader_tasks() -> None:
+    async def run() -> None:
+        class SlowReader(MockAudioTrackReader):
+            async def read_frames(self):
+                await asyncio.sleep(10)
+                if False:
+                    yield AudioFrame(session_id="session-1")
+
+        handler = LiveKitRoomHandler(config=LiveKitConfig())
+        handler.start_reader_task(SlowReader([]), track_id="slow")
+        assert handler.active_reader_tasks
+        await handler.stop_all_reader_tasks()
+        assert handler.active_reader_tasks == {}
+
+    asyncio.run(run())
+
+
 def test_room_handler_start_rejects_incomplete_config() -> None:
     handler = LiveKitRoomHandler(config=LiveKitConfig())
 

@@ -87,6 +87,18 @@ input {
   margin-top: 16px;
 }
 
+.hint {
+  margin: 14px 0 0;
+  color: #52606d;
+}
+
+code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #eef2f7;
+  color: #17202a;
+}
+
 button {
   padding: 9px 14px;
   border: 0;
@@ -113,6 +125,18 @@ pre,
   display: grid;
   align-content: start;
   gap: 6px;
+}
+
+.worker-card {
+  grid-column: 1 / -1;
+}
+
+.worker-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+  color: #17202a;
 }
 
 @media (max-width: 800px) {

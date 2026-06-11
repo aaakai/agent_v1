@@ -14,6 +14,9 @@ class ASRResult(BaseModel):
     stability: float = 0.0
     timestamp_ms: int | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    language: str | None = None
+    provider: str | None = None
+    latency_ms: int | None = None
 
     @field_validator("session_id")
     @classmethod
@@ -41,3 +44,23 @@ class BaseASRAdapter:
 
     async def close(self) -> None:
         return None
+
+    def get_status(self) -> "ASRProviderStatus":
+        return ASRProviderStatus(
+            provider=self.__class__.__name__,
+            configured=False,
+        )
+
+
+class ASRProviderStatus(BaseModel):
+    provider: str
+    configured: bool
+    streaming: bool = True
+    connected: bool = False
+    session_started: bool = False
+    results_emitted: int = 0
+    partials_emitted: int = 0
+    finals_emitted: int = 0
+    last_text: str | None = None
+    last_error: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)

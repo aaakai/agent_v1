@@ -28,6 +28,7 @@ class LiveKitDebugState(BaseModel):
     tracks: dict[str, Any] = Field(default_factory=dict)
     frames_received: int = 0
     last_frame_timestamp_ms: int | None = None
+    asr: dict[str, Any] = Field(default_factory=dict)
     events: list[LiveKitDebugEvent] = Field(default_factory=list)
     max_events: int = 200
 
@@ -104,6 +105,29 @@ class LiveKitDebugState(BaseModel):
             metadata=dict(metadata or {}),
         )
 
+    def update_asr_status(self, status: dict[str, Any]) -> None:
+        self.asr = _redact_mapping(status)
+        self.append_event(
+            "asr_status_updated",
+            "ASR status updated",
+            room_name=self.room_name,
+            metadata={"provider": self.asr.get("provider") or self.asr.get("adapter", {}).get("provider")},
+        )
+
+    def record_asr_error(
+        self,
+        error: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        safe_metadata = _redact_mapping(dict(metadata or {}))
+        self.asr["last_error"] = error
+        self.append_event(
+            "asr_error",
+            error,
+            room_name=self.room_name,
+            metadata=safe_metadata,
+        )
+
     def snapshot(self) -> dict[str, Any]:
         return self.model_dump(mode="python", exclude={"max_events"})
 
@@ -115,4 +139,19 @@ class LiveKitDebugState(BaseModel):
         self.tracks = {}
         self.frames_received = 0
         self.last_frame_timestamp_ms = None
+        self.asr = {}
         self.events = []
+
+
+def _redact_mapping(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            if "key" in str(key).lower() or "secret" in str(key).lower():
+                redacted[key] = "***" if item else None
+            else:
+                redacted[key] = _redact_mapping(item)
+        return redacted
+    if isinstance(value, list):
+        return [_redact_mapping(item) for item in value]
+    return value

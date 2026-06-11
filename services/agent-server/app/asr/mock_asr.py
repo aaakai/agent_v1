@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from audio_input import AudioFrame
 
-from .base import ASRResult, BaseASRAdapter
+from .base import ASRProviderStatus, ASRResult, BaseASRAdapter
 
 
 class MockASRAdapter(BaseASRAdapter):
@@ -53,6 +53,20 @@ class MockASRAdapter(BaseASRAdapter):
 
     async def close(self) -> None:
         self.closed = True
+
+    def get_status(self) -> ASRProviderStatus:
+        return ASRProviderStatus(
+            provider="mock",
+            configured=True,
+            streaming=True,
+            connected=bool(self.started_sessions) and not self.closed,
+            session_started=bool(self.started_sessions),
+            metadata={
+                "sent_frames": len(self.sent_frames),
+                "closed": self.closed,
+                "queued_results": len(self.queue),
+            },
+        )
 
     def _coerce_scripted_result(self, result: dict) -> ASRResult:
         payload = dict(result)

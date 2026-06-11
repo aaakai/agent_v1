@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from asr import ASRProviderConfig
 from livekit import LiveKitConfig, LiveKitDebugState, LiveKitTokenRequest, create_token
 
 DEFAULT_LIVEKIT_DEBUG_STATE = LiveKitDebugState()
@@ -42,3 +43,30 @@ def get_debug_state() -> dict[str, Any]:
 def reset_debug_state() -> dict[str, Any]:
     DEFAULT_LIVEKIT_DEBUG_STATE.reset()
     return DEFAULT_LIVEKIT_DEBUG_STATE.snapshot()
+
+
+def get_worker_status() -> dict[str, Any]:
+    config = LiveKitConfig.from_env()
+    return {
+        "debug_state": DEFAULT_LIVEKIT_DEBUG_STATE.snapshot(),
+        "configured": config.is_configured(),
+        "missing_fields": config.missing_fields(),
+        "safe_config": config.to_safe_dict(),
+        "livekit_config": config.to_safe_dict(),
+        "asr_config": get_asr_config_status(),
+    }
+
+
+def reset_worker_state() -> dict[str, Any]:
+    DEFAULT_LIVEKIT_DEBUG_STATE.reset()
+    return get_worker_status()
+
+
+def get_asr_config_status() -> dict[str, Any]:
+    config = ASRProviderConfig.from_env()
+    return {
+        "provider": config.normalized_provider(),
+        "configured": config.is_configured(),
+        "missing_fields": config.missing_fields(),
+        "safe_config": config.to_safe_dict(),
+    }

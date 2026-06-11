@@ -81,6 +81,17 @@ def test_fastapi_routes_if_available(monkeypatch) -> None:
     reset = client.post("/api/livekit/reset")
     assert reset.status_code == 200
 
+    worker_status = client.get("/api/livekit/worker-status")
+    assert worker_status.status_code == 200
+    assert "debug_state" in worker_status.json()
+
+    worker_reset = client.post("/api/livekit/worker-reset")
+    assert worker_reset.status_code == 200
+
+    asr_config = client.get("/api/asr/config")
+    assert asr_config.status_code == 200
+    assert "safe_config" in asr_config.json()
+
     livekit_debug = client.get("/livekit-debug")
     assert livekit_debug.status_code == 200
     assert "LiveKit Debug" in livekit_debug.text
