@@ -55,6 +55,7 @@ class DebugSessionResult(BaseModel):
     decision_count: int
     decisions: list[dict[str, Any]]
     player_commands: list[dict[str, Any]] = Field(default_factory=list)
+    turn_status: dict[str, Any] | None = None
     final_state: dict[str, Any]
     errors: list[dict[str, Any]]
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -228,6 +229,11 @@ class DebugSessionRunner:
                 await collect(await self.asr_flush_trigger.consume_event(event))
 
         final_state = self.runtime_coordinator.get_session_state(scenario.session_id)
+        turn_status = (
+            self.asr_flush_trigger.get_status()
+            if self.asr_flush_trigger is not None
+            else None
+        )
         return DebugSessionResult(
             scenario=scenario.name,
             session_id=scenario.session_id,
@@ -236,15 +242,14 @@ class DebugSessionRunner:
             decision_count=len(decisions),
             decisions=decisions,
             player_commands=player_commands,
+            turn_status=turn_status,
             final_state=final_state.model_dump(mode="python"),
             errors=errors,
             metadata={
                 "scenario": scenario.metadata,
                 "consumer_names": self.raw_audio_router.get_consumer_names(),
                 "route_summaries": route_summaries,
-                "asr_flush": self.asr_flush_trigger.get_status()
-                if self.asr_flush_trigger is not None
-                else None,
+                "asr_flush": turn_status,
             },
         )
 

@@ -200,6 +200,54 @@ main {
   color: #5f6b7a;
 }
 
+.turn-boundary {
+  margin-top: 16px;
+  border-left: 5px solid #274c77;
+}
+
+.turn-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.turn-explanation {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  color: #25313d;
+}
+
+.turn-explanation p {
+  margin: 0;
+}
+
+.turn-timeline {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding-left: 22px;
+}
+
+.turn-timeline-item {
+  padding: 9px 12px;
+  background: #f4f8ff;
+  border: 1px solid #d7e5fb;
+  border-radius: 8px;
+}
+
+.turn-timeline-item span {
+  display: block;
+  color: #52606d;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.turn-timeline-item strong {
+  display: block;
+  margin-top: 3px;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -231,6 +279,22 @@ main {
 .status-stopped {
   background: #ffe3e3;
   color: #9a1b1b;
+}
+
+.status-open {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-flushed,
+.status-ended {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.status-unknown {
+  background: #f1f5f9;
+  color: #475569;
 }
 
 .timeline {
@@ -343,6 +407,7 @@ pre {
 
   .summary,
   .summary-grid,
+  .turn-summary-grid,
   .lane-grid,
   .lanes,
   .panels {

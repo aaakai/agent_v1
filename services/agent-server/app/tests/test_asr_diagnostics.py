@@ -20,6 +20,7 @@ def test_asr_diagnostics_records_frame_without_pcm() -> None:
 def test_asr_diagnostics_records_result_and_error() -> None:
     store = ASRDiagnosticsStore()
     store.record_result(ASRResult(session_id="s1", text="hello", is_final=False, provider="mock"))
+    store.record_result(ASRResult(session_id="s1", text="final hello", is_final=True, provider="mock"))
     store.record_error("bad", metadata={"provider": "mock"})
     store.record_flush("silence", results_count=1)
 
@@ -32,6 +33,7 @@ def test_asr_diagnostics_records_result_and_error() -> None:
     assert snapshot["errors"][0]["error"] == "bad"
     assert snapshot["flush_count"] == 1
     assert snapshot["last_flush_reason"] == "silence"
+    assert snapshot["last_final_text"] == "final hello"
     json.dumps(snapshot)
 
 

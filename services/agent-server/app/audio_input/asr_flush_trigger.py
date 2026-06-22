@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from time import time
 from typing import Any
 
 from asr import ASRTrigger
@@ -9,6 +10,10 @@ from schemas.event_types import AUDIO_FEATURE_UPDATE, USER_SPEECH_END
 
 from .audio_frame import AudioFrame
 from .turn_detector import TurnDetector
+
+
+def _now_ms() -> int:
+    return int(time() * 1000)
 
 
 class ASRFlushTrigger:
@@ -25,6 +30,7 @@ class ASRFlushTrigger:
         self.runtime_coordinator = runtime_coordinator
         self.flush_count = 0
         self.last_flush_reason: str | None = None
+        self.last_flush_at_ms: int | None = None
         self.last_decisions: list[dict[str, Any]] = []
         self.errors: list[dict[str, Any]] = []
 
@@ -50,6 +56,8 @@ class ASRFlushTrigger:
         return []
 
     async def flush(self, reason: str = "manual") -> list[dict[str, Any]]:
+        self.last_flush_reason = reason
+        self.last_flush_at_ms = _now_ms()
         try:
             decisions = await self.asr_trigger.flush(reason=reason)
         except Exception as exc:  # noqa: BLE001 - keep router fan-out alive.
@@ -58,7 +66,6 @@ class ASRFlushTrigger:
             self.last_decisions = [error]
             return [error]
         self.flush_count += 1
-        self.last_flush_reason = reason
         self.last_decisions = decisions
         for decision in decisions:
             if decision.get("type") == "asr_error":
@@ -66,9 +73,12 @@ class ASRFlushTrigger:
         return decisions
 
     def get_status(self) -> dict[str, Any]:
+        turn_detector = self.turn_detector.snapshot()
         return {
             "flush_count": self.flush_count,
             "last_flush_reason": self.last_flush_reason,
-            "turn_detector": self.turn_detector.snapshot(),
+            "last_flush_at_ms": self.last_flush_at_ms,
+            "turn_detector": turn_detector,
+            "timeline": list(turn_detector.get("timeline", [])),
             "errors": list(self.errors),
         }

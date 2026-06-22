@@ -13,28 +13,30 @@ def build_narration(
     user_input = _user_input(summary, safe_result)
 
     if scenario == "full":
-        return _full_narration(command_types, user_input)
-    if scenario == "sfx" or "PLAY_SFX" in command_types:
-        return _sfx_narration(summary, safe_result, user_input)
-    if scenario == "backchannel" or "PLAY_BACKCHANNEL" in command_types:
-        return _backchannel_narration()
-    if scenario == "danger" or _interrupt_reason(safe_result) == "dangerous_operation":
-        return _danger_narration(user_input)
-    if scenario == "factual" or _interrupt_reason(safe_result) == "obvious_factual_error":
-        return _factual_narration()
-    if scenario == "bargein" or "STOP_TTS" in command_types:
-        return _bargein_narration()
-    if scenario == "scene":
-        return _scene_narration(safe_result)
-    if scenario == "ambience" or "SET_AMBIENCE" in command_types:
-        return _ambience_narration()
-    if scenario == "normal" or "PLAY_TTS" in command_types:
-        return _normal_narration()
-    return [
+        lines = _full_narration(command_types, user_input)
+    elif scenario == "sfx" or "PLAY_SFX" in command_types:
+        lines = _sfx_narration(summary, safe_result, user_input)
+    elif scenario == "backchannel" or "PLAY_BACKCHANNEL" in command_types:
+        lines = _backchannel_narration()
+    elif scenario == "danger" or _interrupt_reason(safe_result) == "dangerous_operation":
+        lines = _danger_narration(user_input)
+    elif scenario == "factual" or _interrupt_reason(safe_result) == "obvious_factual_error":
+        lines = _factual_narration()
+    elif scenario == "bargein" or "STOP_TTS" in command_types:
+        lines = _bargein_narration()
+    elif scenario == "scene":
+        lines = _scene_narration(safe_result)
+    elif scenario == "ambience" or "SET_AMBIENCE" in command_types:
+        lines = _ambience_narration()
+    elif scenario == "normal" or "PLAY_TTS" in command_types:
+        lines = _normal_narration()
+    else:
+        lines = [
         "本次 debug scenario 已完成运行。",
         "系统产生了若干事件、决策和播放器命令。",
         "可以查看下方的 Lane 状态和 Advanced JSON 进一步排查。",
-    ]
+        ]
+    return _with_turn_narration(lines, summary)[:5]
 
 
 def build_short_timeline(
@@ -47,8 +49,8 @@ def build_short_timeline(
     user_input = _user_input(summary, safe_result)
 
     if scenario == "full":
-        return _full_timeline(command_types, user_input)
-    if scenario == "sfx" or "PLAY_SFX" in command_types:
+        timeline = _full_timeline(command_types, user_input)
+    elif scenario == "sfx" or "PLAY_SFX" in command_types:
         event = _first(extract_sfx_events(safe_result)) or "event_sfx"
         timeline = [
             f"用户输入：{user_input}" if user_input else None,
@@ -60,51 +62,44 @@ def build_short_timeline(
             "Orchestrator → 允许 SFX 播放",
             "Player → PLAY_SFX",
         ]
-        return _present(timeline)
-
-    if scenario == "backchannel" or "PLAY_BACKCHANNEL" in command_types:
-        return [
+        timeline = _present(timeline)
+    elif scenario == "backchannel" or "PLAY_BACKCHANNEL" in command_types:
+        timeline = [
             "检测到用户正在说话",
             "出现 200-500ms 短暂停顿",
             "BackchannelAgent → 轻反馈",
             "Orchestrator → Speech Lane 播放",
             "Player → PLAY_BACKCHANNEL",
         ]
-
-    if scenario == "danger" or _interrupt_reason(safe_result) == "dangerous_operation":
-        return [
+    elif scenario == "danger" or _interrupt_reason(safe_result) == "dangerous_operation":
+        timeline = [
             f"ASR_PARTIAL：{user_input or '危险操作'}",
             "InterruptAgent → dangerous_operation",
             "Orchestrator → interrupt control",
             "Session metadata → followup_needed",
             "DialogueAgent → 等待用户停顿后解释",
         ]
-
-    if scenario == "factual" or _interrupt_reason(safe_result) == "obvious_factual_error":
-        return [
+    elif scenario == "factual" or _interrupt_reason(safe_result) == "obvious_factual_error":
+        timeline = [
             f"ASR_PARTIAL：{user_input or '明显事实错误'}",
             "InterruptAgent → obvious_factual_error",
             "Orchestrator → interrupt control",
             "Player → 短句纠错",
         ]
-
-    if scenario == "bargein" or "STOP_TTS" in command_types:
-        return [
+    elif scenario == "bargein" or "STOP_TTS" in command_types:
+        timeline = [
             "Assistant 正在说话",
             "用户突然开口",
             "barge_in_score 达到阈值",
             "InterruptAgent → STOP_SPEAKING",
             "Player → STOP_TTS",
         ]
-
-    if scenario == "scene":
-        return ["SCENE_CHANGED", "RuntimeCoordinator → 更新 scene", "后续 SFX / ambience 使用新场景"]
-
-    if scenario == "ambience" or "SET_AMBIENCE" in command_types:
-        return ["读取 scene preset", "AmbienceController → SET_AMBIENCE", "Orchestrator → Ambience Lane", "Player → SET_AMBIENCE"]
-
-    if scenario == "normal" or "PLAY_TTS" in command_types:
-        return _present(
+    elif scenario == "scene":
+        timeline = ["SCENE_CHANGED", "RuntimeCoordinator → 更新 scene", "后续 SFX / ambience 使用新场景"]
+    elif scenario == "ambience" or "SET_AMBIENCE" in command_types:
+        timeline = ["读取 scene preset", "AmbienceController → SET_AMBIENCE", "Orchestrator → Ambience Lane", "Player → SET_AMBIENCE"]
+    elif scenario == "normal" or "PLAY_TTS" in command_types:
+        timeline = _present(
             [
                 f"用户输入：{user_input}" if user_input else None,
                 "ASR_FINAL 更新文本",
@@ -113,8 +108,9 @@ def build_short_timeline(
                 "Player → PLAY_TTS",
             ]
         )
-
-    return ["scenario 运行完成", "查看 Lane 状态", "需要细节时展开 Advanced JSON"]
+    else:
+        timeline = ["scenario 运行完成", "查看 Lane 状态", "需要细节时展开 Advanced JSON"]
+    return _with_turn_timeline(timeline, summary)[:7]
 
 
 def extract_command_types(result: dict[str, Any]) -> list[str]:
@@ -295,6 +291,54 @@ def _full_timeline(command_types: list[str], user_input: str | None) -> list[str
         timeline.append("InterruptAgent → STOP_SPEAKING")
     timeline.append("Player → 更新 mock playback state")
     return timeline[:7]
+
+
+def _with_turn_narration(
+    lines: list[str],
+    summary: dict[str, Any],
+) -> list[str]:
+    turn = _dict(summary.get("turn_summary"))
+    if not turn.get("has_turn"):
+        return lines
+    reason = turn.get("last_flush_reason")
+    final_text = turn.get("last_final_text")
+    if reason:
+        message = f"TurnDetector 判断本轮已结束，并因为{_flush_reason_zh(reason)}触发 ASR flush。"
+    else:
+        message = "TurnDetector 已记录本轮语音边界，用于决定 ASR 何时输出 final。"
+    if final_text:
+        message += f" 最近的 ASR_FINAL 是“{final_text}”。"
+    if message in lines:
+        return lines
+    return [*lines, message]
+
+
+def _with_turn_timeline(
+    timeline: list[str],
+    summary: dict[str, Any],
+) -> list[str]:
+    turn = _dict(summary.get("turn_summary"))
+    if not turn.get("has_turn"):
+        return timeline
+    reason = turn.get("last_flush_reason")
+    final_text = turn.get("last_final_text")
+    steps = list(timeline)
+    if reason:
+        steps.append(f"TurnDetector → ASR flush（{_flush_reason_zh(reason)}）")
+    if final_text:
+        steps.append(f"ASR_FINAL → {final_text}")
+    return _dedupe(steps)
+
+
+def _flush_reason_zh(reason: Any) -> str:
+    mapping = {
+        "silence": "静音达到阈值",
+        "user_speech_end": "用户语音结束事件",
+        "max_turn_duration": "单轮时长达到上限",
+        "debug_force_turn_end": "调试强制结束",
+        "manual": "手动触发",
+    }
+    return mapping.get(str(reason), "未知原因")
 
 
 def _commands(result: dict[str, Any]) -> list[dict[str, Any]]:

@@ -92,3 +92,11 @@ def test_build_debug_summary_includes_narration_and_is_json_friendly() -> None:
     assert summary["narration"]
     assert summary["short_timeline"]
     assert json.loads(json.dumps(summary, ensure_ascii=False))["scenario"] == "full"
+
+
+def test_turn_final_narration_mentions_asr_flush() -> None:
+    result = run_debug_scenario("turn_final", with_player=True)
+    summary = result["simplified_summary"]
+
+    assert any("ASR flush" in line or "ASR_FINAL" in line for line in summary["narration"])
+    assert any("ASR flush" in line or "ASR_FINAL" in line for line in summary["short_timeline"])

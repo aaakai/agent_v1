@@ -12,6 +12,7 @@ def test_turn_detector_speaking_does_not_flush() -> None:
 
     assert result.should_flush_asr is False
     assert detector.snapshot()["turn_open"] is True
+    assert detector.snapshot()["timeline"][0]["type"] == "speech_start"
 
 
 def test_turn_detector_silence_threshold_flushes_once() -> None:
@@ -32,6 +33,9 @@ def test_turn_detector_silence_threshold_flushes_once() -> None:
     assert flush.should_flush_asr is True
     assert flush.reason == "silence"
     assert duplicate.should_flush_asr is False
+    timeline_types = [item["type"] for item in detector.snapshot()["timeline"]]
+    assert "silence" in timeline_types
+    assert "flush" in timeline_types
 
 
 def test_turn_detector_new_speech_allows_second_flush() -> None:
@@ -62,3 +66,15 @@ def test_turn_detector_user_speech_end_and_timeout() -> None:
     assert end.should_flush_asr is True
     assert end.reason == "user_speech_end"
     json.dumps(detector.snapshot())
+
+
+def test_turn_detector_timeline_records_reset_and_caps_items() -> None:
+    detector = TurnDetector(silence_flush_ms=10)
+    for index in range(250):
+        detector.update_from_features({"timestamp_ms": 1000 + index, "is_speaking": True})
+
+    detector.reset()
+    snapshot = detector.snapshot()
+
+    assert len(snapshot["timeline"]) <= 200
+    assert snapshot["timeline"][-1]["type"] == "reset"

@@ -70,6 +70,7 @@
           <h2>ASR Provider Status</h2>
           <p class="hint">OpenAI provider 当前使用 chunked final transcription，不是 realtime partial。</p>
           <p class="hint">Silence / USER_SPEECH_END 会触发 ASR flush，生成 turn-final 文本。</p>
+          <p class="hint">Turn Boundary / ASR Flush 会显示 flush_count、last_flush_reason 和 turn_detector snapshot。</p>
           <div class="worker-summary" id="asrSummaryBox">Loading ASR config...</div>
           <pre id="asrStatusBox">{}</pre>
         </article>

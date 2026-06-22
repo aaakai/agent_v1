@@ -16,6 +16,7 @@ def test_livekit_debug_static_files_exist_and_are_safe() -> None:
     assert "ASR Provider Status" in html
     assert "chunked final transcription" in html
     assert "ASR flush" in html
+    assert "Turn Boundary / ASR Flush" in html
     assert "roomInput" in html
     assert "identityInput" in html
     assert "Connect" in html
@@ -27,6 +28,8 @@ def test_livekit_debug_static_files_exist_and_are_safe() -> None:
     assert "chunk_ms" in js
     assert "flush_count" in js
     assert "last_flush_reason" in js
+    assert "turn_status" in js
+    assert "turn_detector" in js
     assert "API_SECRET" not in html
     assert "API_SECRET" not in js
     assert "ASR_API_KEY" not in html

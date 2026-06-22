@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from web_debug.narration import build_narration, build_short_timeline
+from web_debug.turn_summary import build_turn_summary
 
 
 class DebugSummary(BaseModel):
@@ -17,6 +18,7 @@ class DebugSummary(BaseModel):
     short_timeline: list[str] = Field(default_factory=list)
     main_actions: list[str] = Field(default_factory=list)
     lanes: dict[str, Any] = Field(default_factory=dict)
+    turn_summary: dict[str, Any] = Field(default_factory=dict)
     key_decisions: list[dict[str, Any]] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     counters: dict[str, int] = Field(default_factory=dict)
@@ -54,6 +56,7 @@ def build_debug_summary(result: dict[str, Any]) -> dict[str, Any]:
             key_decisions=key_decisions,
         ),
         lanes=lanes,
+        turn_summary=build_turn_summary(result),
         key_decisions=key_decisions,
         counters=counters,
         raw_refs={

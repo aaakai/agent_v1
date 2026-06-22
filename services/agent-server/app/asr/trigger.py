@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from time import time
 from typing import Any
 
 from audio_input import AudioFrame
@@ -9,6 +10,10 @@ from schemas.event_types import ASR_FINAL, ASR_PARTIAL
 
 from .base import ASRResult, BaseASRAdapter
 from .diagnostics import ASRDiagnosticsStore
+
+
+def _now_ms() -> int:
+    return int(time() * 1000)
 
 
 class ASRTrigger:
@@ -81,17 +86,28 @@ class ASRTrigger:
         flush = getattr(self.asr_adapter, "flush", None)
         if not callable(flush):
             return []
+        flushed_at_ms = _now_ms()
         try:
             results = await flush()
         except Exception as exc:  # noqa: BLE001 - keep caller alive.
             return [self._record_provider_error(exc)]
         self.flush_count += 1
         self.last_flush_reason = reason
-        self.diagnostics.record_flush(reason, len(results))
+        self.diagnostics.record_flush(
+            reason,
+            len(results),
+            metadata={"flushed_at_ms": flushed_at_ms},
+        )
         decisions: list[dict[str, Any]] = []
         for result in results:
             metadata = dict(result.metadata)
-            metadata.update({"flush_reason": reason, "turn_final": True})
+            metadata.update(
+                {
+                    "flush_reason": reason,
+                    "turn_final": True,
+                    "flushed_at_ms": flushed_at_ms,
+                }
+            )
             result = result.model_copy(update={"metadata": metadata})
             event = self.result_to_event(result)
             decisions.extend(self.runtime_coordinator.process_event(event))

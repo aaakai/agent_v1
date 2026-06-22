@@ -171,6 +171,9 @@ def test_turn_final_scenario_flushes_asr_final() -> None:
     assert result.frames_processed > 0
     assert result.final_state["asr"]["final"] == "我想测试一下"
     assert result.metadata["asr_flush"]["last_flush_reason"] == "silence"
+    assert result.turn_status is not None
+    assert result.turn_status["last_flush_reason"] == "silence"
+    assert result.turn_status["timeline"][-1]["type"] == "flush"
 
 
 def test_short_utterance_scenario_flushes_on_user_speech_end() -> None:
@@ -180,6 +183,8 @@ def test_short_utterance_scenario_flushes_on_user_speech_end() -> None:
 
     assert result.final_state["asr"]["final"] == "短句测试"
     assert result.metadata["asr_flush"]["last_flush_reason"] == "user_speech_end"
+    assert result.turn_status is not None
+    assert result.turn_status["last_flush_reason"] == "user_speech_end"
 
 
 def test_sfx_scenario_generates_spatial_sfx_decision() -> None:

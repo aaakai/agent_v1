@@ -56,8 +56,13 @@ def test_consume_features_silence_triggers_flush() -> None:
 
     assert adapter is not None and adapter.flush_calls == 1
     assert trigger.last_flush_reason == "silence"
+    assert trigger.last_flush_at_ms is not None
     assert coordinator.get_session_state("s1").asr.final == "final"
     assert decisions
+    status = trigger.get_status()
+    assert status["last_flush_reason"] == "silence"
+    assert status["last_flush_at_ms"] is not None
+    assert status["timeline"][-1]["type"] == "flush"
 
 
 def test_consume_event_user_speech_end_triggers_flush() -> None:
@@ -101,4 +106,5 @@ def test_flush_error_recorded_and_status_json_friendly() -> None:
 
     assert result[0]["type"] == "asr_error"
     assert trigger.errors
+    assert trigger.get_status()["last_flush_at_ms"] is not None
     json.dumps(trigger.get_status(), ensure_ascii=False)

@@ -12,6 +12,9 @@ const elements = {
   speechLaneSummary: document.getElementById('speechLaneSummary'),
   sfxLaneSummary: document.getElementById('sfxLaneSummary'),
   ambienceLaneSummary: document.getElementById('ambienceLaneSummary'),
+  turnSummaryBox: document.getElementById('turnSummaryBox'),
+  turnExplanationBox: document.getElementById('turnExplanationBox'),
+  turnTimelineList: document.getElementById('turnTimelineList'),
   shortTimelineList: document.getElementById('shortTimelineList'),
   keyDecisionsList: document.getElementById('keyDecisionsList'),
   advancedJson: document.getElementById('advancedJson'),
@@ -97,6 +100,7 @@ function renderSummary(summary) {
     elements.warningsBox.innerHTML = '';
     renderNarration([]);
     renderLaneSummary(null);
+    renderTurnSummary(null);
     renderShortTimeline([]);
     renderKeyDecisions([]);
     return;
@@ -111,6 +115,7 @@ function renderSummary(summary) {
   renderNarration(summary.narration || []);
   renderWarnings(summary.warnings || []);
   renderLaneSummary(summary.lanes || {});
+  renderTurnSummary(summary.turn_summary || null);
   renderShortTimeline(summary.short_timeline || []);
   renderKeyDecisions(summary.key_decisions || []);
 }
@@ -170,6 +175,48 @@ function renderLaneSummary(lanes) {
   ]);
 }
 
+function renderTurnSummary(turnSummary) {
+  const turn = turnSummary || {};
+  const hasTurn = Boolean(turn.has_turn);
+  elements.turnSummaryBox.innerHTML = laneRows([
+    ['status', statusBadge(hasTurn ? (turn.turn_status || 'unknown') : 'idle')],
+    ['flush_count', turn.flush_count ?? 0],
+    ['last_flush_reason', escapeHtml(turn.last_flush_reason || 'none')],
+    ['last_final_text', escapeHtml(turn.last_final_text || 'none')],
+    ['silence', formatSilence(turn.silence_ms, turn.silence_flush_ms)],
+  ]);
+
+  elements.turnExplanationBox.innerHTML = '';
+  const explanations = hasTurn
+    ? (turn.explanation || [])
+    : ['暂无 Turn Boundary / ASR Flush 信息。'];
+  for (const line of explanations) {
+    const node = document.createElement('p');
+    node.textContent = line;
+    elements.turnExplanationBox.appendChild(node);
+  }
+
+  elements.turnTimelineList.innerHTML = '';
+  const timeline = hasTurn ? (turn.timeline || []) : [];
+  if (!timeline.length) {
+    const node = document.createElement('li');
+    node.className = 'turn-timeline-item';
+    node.textContent = '暂无 turn timeline。';
+    elements.turnTimelineList.appendChild(node);
+    return;
+  }
+  for (const item of timeline) {
+    const node = document.createElement('li');
+    node.className = `turn-timeline-item turn-event-${escapeHtml(item.type || 'unknown')}`;
+    const timestamp = item.timestamp_ms ?? '-';
+    node.innerHTML = `
+      <span>${escapeHtml(timestamp)} · ${escapeHtml(item.type || 'unknown')}</span>
+      <strong>${escapeHtml(item.message || '')}</strong>
+    `;
+    elements.turnTimelineList.appendChild(node);
+  }
+}
+
 function renderShortTimeline(shortTimeline) {
   elements.shortTimelineList.innerHTML = '';
   const steps = shortTimeline.length ? shortTimeline : ['暂无简短链路。'];
@@ -217,6 +264,16 @@ function addSummaryCard(label, value) {
   node.className = 'summary-card metric';
   node.innerHTML = `<span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong>`;
   elements.countersBox.appendChild(node);
+}
+
+function formatSilence(silenceMs, thresholdMs) {
+  if (silenceMs === null || silenceMs === undefined) {
+    return 'none';
+  }
+  if (thresholdMs === null || thresholdMs === undefined) {
+    return `${silenceMs}ms`;
+  }
+  return `${silenceMs}ms / ${thresholdMs}ms`;
 }
 
 function showError(error) {

@@ -25,6 +25,7 @@ class ASRDiagnostics(BaseModel):
     results_emitted: int = 0
     flush_count: int = 0
     last_flush_reason: str | None = None
+    last_final_text: str | None = None
     flushes: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -106,6 +107,11 @@ class ASRDiagnosticsStore:
             for event in self.events
             if event["type"] == "result"
         ][-20:]
+        final_results = [
+            event
+            for event in self.events
+            if event["type"] == "result" and event.get("is_final") is True
+        ]
         errors = [
             event
             for event in self.events
@@ -128,6 +134,7 @@ class ASRDiagnosticsStore:
             results_emitted=len(recent_results),
             flush_count=len([event for event in self.events if event["type"] == "flush"]),
             last_flush_reason=flushes[-1]["reason"] if flushes else None,
+            last_final_text=final_results[-1]["text"] if final_results else None,
             flushes=flushes,
         )
         data = diagnostics.model_dump(mode="python")

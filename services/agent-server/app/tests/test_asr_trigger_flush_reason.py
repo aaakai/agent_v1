@@ -35,8 +35,10 @@ def test_asr_trigger_flush_reason_updates_metadata_and_state() -> None:
     assert event.payload["metadata"]["existing"] is True
     assert event.payload["metadata"]["flush_reason"] == "silence"
     assert event.payload["metadata"]["turn_final"] is True
+    assert isinstance(event.payload["metadata"]["flushed_at_ms"], int)
     assert trigger.get_status()["flush_count"] == 1
     assert trigger.get_status()["diagnostics"]["flush_count"] == 1
+    assert trigger.get_status()["diagnostics"]["last_final_text"] == "turn final"
     assert decisions
 
 

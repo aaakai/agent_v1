@@ -18,6 +18,9 @@ def test_index_html_has_simplified_summary_and_advanced_json() -> None:
     assert "Speech Lane" in html
     assert "SFX Lane" in html
     assert "Ambience Lane" in html
+    assert "Turn Boundary / ASR Flush" in html
+    assert 'id="turnSummaryBox"' in html
+    assert 'id="turnTimelineList"' in html
     assert "/static/app.js" in html
     assert "/static/style.css" in html
 
@@ -28,6 +31,8 @@ def test_app_js_uses_simplified_summary_renderer() -> None:
     assert "renderSummary" in app_js
     assert "simplified_summary" in app_js
     assert "advancedJson" in app_js
+    assert "renderTurnSummary" in app_js
+    assert "turn_summary" in app_js
     assert "/api/scenarios" in app_js
     assert "/api/run-scenario" in app_js
 
@@ -39,4 +44,6 @@ def test_style_css_contains_summary_timeline_and_warning_styles() -> None:
     assert ".lane-card" in style
     assert ".warning" in style
     assert ".timeline" in style
+    assert ".turn-boundary" in style
+    assert ".turn-timeline" in style
     assert ".status-playing" in style
