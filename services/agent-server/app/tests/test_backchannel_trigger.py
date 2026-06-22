@@ -77,3 +77,34 @@ def test_backchannel_trigger_speech_then_pause_can_play_backchannel() -> None:
         and decision.get("lane") == "speech"
         for decision in decisions
     )
+
+
+def test_backchannel_trigger_calls_on_features_and_merges_decisions() -> None:
+    coordinator = RuntimeCoordinator()
+    seen_features: list[dict] = []
+
+    async def on_features(features: dict) -> list[dict]:
+        seen_features.append(features)
+        return [{"decision": "flush", "reason": "test"}]
+
+    trigger = BackchannelTrigger(
+        session_id="session-1",
+        runtime_coordinator=coordinator,
+        extractor=AudioFeatureExtractor(
+            vad=EnergyVAD(energy_threshold=0.01, min_speech_frames=1)
+        ),
+        on_features=on_features,
+    )
+
+    decisions = asyncio.run(
+        trigger.consume(
+            AudioFrame(
+                session_id="session-1",
+                timestamp_ms=1000,
+                pcm=pcm16(10000, -10000),
+            )
+        )
+    )
+
+    assert seen_features
+    assert {"decision": "flush", "reason": "test"} in decisions

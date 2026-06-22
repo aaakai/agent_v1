@@ -31,6 +31,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--asr-chunk-ms", type=int)
     parser.add_argument("--asr-min-chunk-ms", type=int)
     parser.add_argument("--asr-max-buffer-ms", type=int)
+    parser.add_argument("--asr-silence-flush-ms", type=int)
+    parser.add_argument("--asr-min-speech-ms", type=int)
+    parser.add_argument("--asr-max-turn-ms", type=int)
+    parser.add_argument("--no-asr-flush-on-silence", action="store_true")
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     config = LiveKitConfig.from_env()
@@ -53,6 +57,10 @@ def main(argv: list[str] | None = None) -> int:
         asr_chunk_duration_ms=args.asr_chunk_ms,
         asr_min_chunk_duration_ms=args.asr_min_chunk_ms,
         asr_max_buffer_duration_ms=args.asr_max_buffer_ms,
+        asr_silence_flush_ms=args.asr_silence_flush_ms,
+        asr_min_speech_ms=args.asr_min_speech_ms,
+        asr_max_turn_ms=args.asr_max_turn_ms,
+        asr_flush_on_silence=False if args.no_asr_flush_on_silence else None,
     )
     asr_config = ASRProviderConfig.from_env()
     asr_updates = {

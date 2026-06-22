@@ -27,6 +27,8 @@ class ASRTrigger:
         self.diagnostics = diagnostics or ASRDiagnosticsStore()
         self.started = False
         self.results_emitted = 0
+        self.flush_count = 0
+        self.last_flush_reason: str | None = None
         self.provider_errors: list[dict[str, Any]] = []
         self.last_result: ASRResult | None = None
 
@@ -75,7 +77,7 @@ class ASRTrigger:
     async def close(self) -> None:
         await self.asr_adapter.close()
 
-    async def flush(self) -> list[dict[str, Any]]:
+    async def flush(self, reason: str = "manual") -> list[dict[str, Any]]:
         flush = getattr(self.asr_adapter, "flush", None)
         if not callable(flush):
             return []
@@ -83,8 +85,14 @@ class ASRTrigger:
             results = await flush()
         except Exception as exc:  # noqa: BLE001 - keep caller alive.
             return [self._record_provider_error(exc)]
+        self.flush_count += 1
+        self.last_flush_reason = reason
+        self.diagnostics.record_flush(reason, len(results))
         decisions: list[dict[str, Any]] = []
         for result in results:
+            metadata = dict(result.metadata)
+            metadata.update({"flush_reason": reason, "turn_final": True})
+            result = result.model_copy(update={"metadata": metadata})
             event = self.result_to_event(result)
             decisions.extend(self.runtime_coordinator.process_event(event))
             self.diagnostics.record_result(result)
@@ -97,6 +105,8 @@ class ASRTrigger:
         return {
             "started": self.started,
             "results_emitted": self.results_emitted,
+            "flush_count": self.flush_count,
+            "last_flush_reason": self.last_flush_reason,
             "provider_errors": list(self.provider_errors),
             "last_result": self.last_result.model_dump(mode="python") if self.last_result else None,
             "adapter": adapter_status.model_dump(mode="python"),

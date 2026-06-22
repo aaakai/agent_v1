@@ -197,6 +197,9 @@ function renderAsrStatus(data) {
   const config = data.config || {};
   const status = data.status || {};
   const adapter = status.adapter || status;
+  const flush = status.flush_trigger || {};
+  const turn = flush.turn_detector || {};
+  const diagnostics = status.trigger?.diagnostics || {};
   livekitDebug.elements.asrStatusBox.textContent = JSON.stringify(data, null, 2);
   livekitDebug.elements.asrSummaryBox.innerHTML = `
     <div><strong>provider:</strong> ${config.provider || adapter.provider || '-'}</div>
@@ -208,6 +211,11 @@ function renderAsrStatus(data) {
     <div><strong>missing:</strong> ${(config.missing_fields || config.safe_config?.missing_fields || []).join(', ') || '-'}</div>
     <div><strong>partials:</strong> ${adapter.partials_emitted || 0}</div>
     <div><strong>finals:</strong> ${adapter.finals_emitted || 0}</div>
+    <div><strong>flush_count:</strong> ${flush.flush_count || diagnostics.flush_count || 0}</div>
+    <div><strong>last_flush_reason:</strong> ${flush.last_flush_reason || diagnostics.last_flush_reason || '-'}</div>
+    <div><strong>silence_flush_ms:</strong> ${turn.silence_flush_ms || '-'}</div>
+    <div><strong>turn_open:</strong> ${Boolean(turn.turn_open)}</div>
+    <div><strong>silence_ms:</strong> ${turn.silence_ms || 0}</div>
     <div><strong>last_text:</strong> ${adapter.last_text || '-'}</div>
     <div><strong>last_error:</strong> ${adapter.last_error || status.last_error || '-'}</div>
   `;

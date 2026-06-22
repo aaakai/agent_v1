@@ -81,6 +81,26 @@ def test_pause_outside_backchannel_window_has_no_opportunity() -> None:
     assert features["emotion"] is None
 
 
+def test_debug_overrides_force_speaking_pause_and_barge_in() -> None:
+    extractor = AudioFeatureExtractor()
+    frame = AudioFrame(
+        session_id="session-1",
+        timestamp_ms=1000,
+        pcm=pcm16(0, 0),
+        metadata={
+            "force_is_speaking": True,
+            "force_pause_ms": 350,
+            "force_barge_in_score": 0.9,
+        },
+    )
+
+    features = extractor.extract(frame)
+
+    assert features["is_speaking"] is True
+    assert features["pause_ms"] == 350
+    assert features["barge_in_score"] == 0.9
+
+
 def test_to_event_generates_audio_feature_update() -> None:
     extractor = AudioFeatureExtractor()
     features = {

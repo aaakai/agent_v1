@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -12,6 +13,8 @@ from asr import (
     create_asr_adapter,
 )
 from audio_input import AudioFeatureExtractor, BackchannelTrigger, RawAudioRouter
+from audio_input.asr_flush_trigger import ASRFlushTrigger
+from audio_input.turn_detector import TurnDetector
 from runtime import RuntimeCoordinator
 
 from .audio_track_reader import LiveKitAudioTrackReader
@@ -43,6 +46,10 @@ class LiveKitAgentWorkerOptions(BaseModel):
     asr_chunk_duration_ms: int | None = None
     asr_min_chunk_duration_ms: int | None = None
     asr_max_buffer_duration_ms: int | None = None
+    asr_silence_flush_ms: int | None = None
+    asr_min_speech_ms: int | None = None
+    asr_max_turn_ms: int | None = None
+    asr_flush_on_silence: bool | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -87,6 +94,7 @@ class LiveKitAgentWorker:
         self.asr_adapter = create_asr_adapter(self.asr_config)
         self.asr_diagnostics = ASRDiagnosticsStore()
         self.asr_trigger: ASRTrigger | None = None
+        self.asr_flush_trigger: ASRFlushTrigger | None = None
         self._refresh_asr_status()
 
         if self.options.enable_runtime_consumers:
@@ -269,15 +277,6 @@ class LiveKitAgentWorker:
     def _ensure_runtime_consumers(self) -> None:
         room_name = self._room_name()
         names = set(self.raw_audio_router.get_consumer_names())
-        if "backchannel" not in names:
-            self.raw_audio_router.add_consumer(
-                "backchannel",
-                BackchannelTrigger(
-                    session_id=room_name,
-                    runtime_coordinator=self.runtime_coordinator,
-                    extractor=AudioFeatureExtractor(),
-                ).consume,
-            )
         if "asr" not in names:
             self.asr_trigger = ASRTrigger(
                 session_id=room_name,
@@ -285,10 +284,43 @@ class LiveKitAgentWorker:
                 asr_adapter=self.asr_adapter,
                 diagnostics=self.asr_diagnostics,
             )
+        if self._asr_flush_enabled() and self.asr_trigger is not None:
+            self.asr_flush_trigger = ASRFlushTrigger(
+                session_id=room_name,
+                asr_trigger=self.asr_trigger,
+                turn_detector=TurnDetector(
+                    silence_flush_ms=self._asr_silence_flush_ms(),
+                    min_speech_ms=self._asr_min_speech_ms(),
+                    max_turn_ms=self._asr_max_turn_ms(),
+                ),
+                runtime_coordinator=self.runtime_coordinator,
+            )
+        if "backchannel" not in names:
+            self.raw_audio_router.add_consumer(
+                "backchannel",
+                BackchannelTrigger(
+                    session_id=room_name,
+                    runtime_coordinator=self.runtime_coordinator,
+                    extractor=AudioFeatureExtractor(),
+                    on_features=self._consume_asr_flush_features
+                    if self.asr_flush_trigger is not None
+                    else None,
+                ).consume,
+            )
+        if "asr" not in names and self.asr_trigger is not None:
             self.raw_audio_router.add_consumer(
                 "asr",
                 self._consume_asr,
             )
+        if (
+            "asr_flush" not in names
+            and self.asr_flush_trigger is not None
+        ):
+            self.raw_audio_router.add_consumer(
+                "asr_flush",
+                self.asr_flush_trigger.consume_frame,
+            )
+        self._refresh_asr_status()
 
     def _normalize_track_args(self, args: tuple[Any, ...]) -> tuple[Any, Any | None, Any | None]:
         track = args[0] if len(args) >= 1 else None
@@ -306,6 +338,22 @@ class LiveKitAgentWorker:
         if self.asr_trigger is None:
             return []
         decisions = await self.asr_trigger.consume(frame)
+        self._refresh_asr_status()
+        for decision in decisions:
+            if decision.get("type") == "asr_error":
+                self.debug_state.record_asr_error(
+                    str(decision.get("error", "")),
+                    metadata={"provider": decision.get("provider")},
+                )
+        return decisions
+
+    async def _consume_asr_flush_features(
+        self,
+        features: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        if self.asr_flush_trigger is None:
+            return []
+        decisions = await self.asr_flush_trigger.consume_features(features)
         self._refresh_asr_status()
         for decision in decisions:
             if decision.get("type") == "asr_error":
@@ -342,7 +390,23 @@ class LiveKitAgentWorker:
         status["config"] = self.asr_config.to_safe_dict()
         if self.asr_trigger is not None:
             status["trigger"] = self.asr_trigger.get_status()
+        if self.asr_flush_trigger is not None:
+            status["flush_trigger"] = self.asr_flush_trigger.get_status()
         self.debug_state.update_asr_status(status)
+
+    def _asr_flush_enabled(self) -> bool:
+        if self.options.asr_flush_on_silence is not None:
+            return self.options.asr_flush_on_silence
+        return _env_bool("ASR_FLUSH_ON_SILENCE", default=True)
+
+    def _asr_silence_flush_ms(self) -> int:
+        return self.options.asr_silence_flush_ms or int(os.getenv("ASR_SILENCE_FLUSH_MS") or "700")
+
+    def _asr_min_speech_ms(self) -> int:
+        return self.options.asr_min_speech_ms or int(os.getenv("ASR_MIN_SPEECH_MS") or "200")
+
+    def _asr_max_turn_ms(self) -> int:
+        return self.options.asr_max_turn_ms or int(os.getenv("ASR_MAX_TURN_MS") or "15000")
 
     def _result(self) -> LiveKitAgentWorkerResult:
         snapshot = self.debug_state.snapshot()
@@ -356,3 +420,10 @@ class LiveKitAgentWorker:
             errors=list(self.errors),
             debug_state=snapshot,
         )
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}

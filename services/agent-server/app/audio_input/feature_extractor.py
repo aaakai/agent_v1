@@ -29,6 +29,9 @@ class AudioFeatureExtractor:
         vad_result = self.vad.update(frame)
         frame_is_speech = vad_result["is_speech"]
         is_speaking = vad_result["state"] == "speech" or frame_is_speech
+        if "force_is_speaking" in frame.metadata:
+            is_speaking = bool(frame.metadata["force_is_speaking"])
+            frame_is_speech = is_speaking
 
         if frame_is_speech:
             self.last_speech_timestamp_ms = frame.timestamp_ms
@@ -50,6 +53,18 @@ class AudioFeatureExtractor:
         ):
             opportunity = 0.85
             emotion = "thinking"
+        if "force_pause_ms" in frame.metadata:
+            self.current_pause_ms = int(frame.metadata["force_pause_ms"])
+            opportunity = 0.85 if (
+                self.backchannel_pause_min_ms
+                <= self.current_pause_ms
+                <= self.backchannel_pause_max_ms
+            ) else 0.0
+            emotion = "thinking" if opportunity else None
+
+        barge_in_score = 0.6 if is_speaking else 0.0
+        if "force_barge_in_score" in frame.metadata:
+            barge_in_score = float(frame.metadata["force_barge_in_score"])
 
         self.last_state = vad_result["state"]
         return {
@@ -59,7 +74,7 @@ class AudioFeatureExtractor:
             "is_speaking": is_speaking,
             "pause_ms": self.current_pause_ms,
             "backchannel_opportunity": opportunity,
-            "barge_in_score": 0.6 if is_speaking else 0.0,
+            "barge_in_score": barge_in_score,
             "emotion": emotion,
         }
 

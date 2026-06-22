@@ -71,6 +71,12 @@ def test_livekit_worker_dry_run_accepts_asr_options(monkeypatch, capsys) -> None
             "300",
             "--asr-max-buffer-ms",
             "3000",
+            "--asr-silence-flush-ms",
+            "700",
+            "--asr-min-speech-ms",
+            "100",
+            "--asr-max-turn-ms",
+            "9000",
         ]
     )
 
@@ -80,6 +86,8 @@ def test_livekit_worker_dry_run_accepts_asr_options(monkeypatch, capsys) -> None
     assert '"configured": true' in captured.out
     assert '"chunk_duration_ms": 1000' in captured.out
     assert '"min_chunk_duration_ms": 300' in captured.out
+    assert '"asr_silence_flush_ms": 700' in captured.out
+    assert '"asr_max_turn_ms": 9000' in captured.out
     assert "gpt-4o-mini-transcribe" in captured.out
     assert "openai-secret" not in captured.out
 
@@ -89,12 +97,17 @@ def test_livekit_worker_dry_run_disable_asr(monkeypatch, capsys) -> None:
     monkeypatch.setenv("LIVEKIT_API_KEY", "key")
     monkeypatch.setenv("LIVEKIT_API_SECRET", "secret-value")
 
-    exit_code = livekit_worker.main(["--dry-run", "--disable-asr"])
+    exit_code = livekit_worker.main([
+        "--dry-run",
+        "--disable-asr",
+        "--no-asr-flush-on-silence",
+    ])
 
     captured = capsys.readouterr()
     assert exit_code == 0
     assert '"provider": "disabled"' in captured.out
     assert '"asr_enabled": false' in captured.out
+    assert '"asr_flush_on_silence": false' in captured.out
 
 
 def test_livekit_worker_rejects_incomplete_config(monkeypatch, capsys) -> None:

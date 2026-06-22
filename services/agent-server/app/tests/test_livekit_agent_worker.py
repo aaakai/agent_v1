@@ -31,7 +31,11 @@ def test_agent_worker_default_initialization() -> None:
     assert isinstance(worker.raw_audio_router, RawAudioRouter)
     assert isinstance(worker.runtime_coordinator, RuntimeCoordinator)
     assert isinstance(worker.debug_state, LiveKitDebugState)
-    assert set(worker.raw_audio_router.get_consumer_names()) == {"backchannel", "asr"}
+    assert set(worker.raw_audio_router.get_consumer_names()) == {
+        "asr",
+        "asr_flush",
+        "backchannel",
+    }
 
 
 def test_agent_worker_audio_track_detection() -> None:

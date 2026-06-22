@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from asr import ASRTrigger, MockASRAdapter
+from asr import ASRTrigger, BaseASRAdapter, MockStreamingASRAdapter
 from audio_runtime import AmbienceController, CommandRecorder, commands_to_dict
 from audio_input import (
     AudioFeatureExtractor,
@@ -15,6 +15,8 @@ from audio_input import (
     EnergyVAD,
     RawAudioRouter,
 )
+from audio_input.asr_flush_trigger import ASRFlushTrigger
+from audio_input.turn_detector import TurnDetector
 from schemas import Event
 from schemas.event_types import (
     ASSISTANT_SPEECH_START,
@@ -123,7 +125,9 @@ class DebugSessionRunner:
         "full",
         "normal",
         "scene",
+        "short_utterance",
         "sfx",
+        "turn_final",
     }
 
     def __init__(
@@ -132,24 +136,38 @@ class DebugSessionRunner:
         raw_audio_router: RawAudioRouter | None = None,
         backchannel_trigger: BackchannelTrigger | None = None,
         asr_trigger: ASRTrigger | None = None,
-        asr_adapter: MockASRAdapter | None = None,
+        asr_adapter: BaseASRAdapter | None = None,
         command_recorder: CommandRecorder | None = None,
+        enable_asr_flush: bool = True,
     ) -> None:
         self.runtime_coordinator = runtime_coordinator or RuntimeCoordinator()
         self.raw_audio_router = raw_audio_router or RawAudioRouter()
-        self.asr_adapter = asr_adapter or MockASRAdapter()
+        self.asr_adapter = asr_adapter or MockStreamingASRAdapter(provider_name="mock")
         self.command_recorder = command_recorder or CommandRecorder()
+        self.asr_trigger = asr_trigger or ASRTrigger(
+            session_id=self.DEFAULT_SESSION_ID,
+            runtime_coordinator=self.runtime_coordinator,
+            asr_adapter=self.asr_adapter,
+        )
+        self.asr_flush_trigger = (
+            ASRFlushTrigger(
+                session_id=self.DEFAULT_SESSION_ID,
+                asr_trigger=self.asr_trigger,
+                turn_detector=TurnDetector(silence_flush_ms=700),
+                runtime_coordinator=self.runtime_coordinator,
+            )
+            if enable_asr_flush
+            else None
+        )
         self.backchannel_trigger = backchannel_trigger or BackchannelTrigger(
             session_id=self.DEFAULT_SESSION_ID,
             runtime_coordinator=self.runtime_coordinator,
             extractor=AudioFeatureExtractor(
                 vad=EnergyVAD(energy_threshold=0.01, min_speech_frames=2)
             ),
-        )
-        self.asr_trigger = asr_trigger or ASRTrigger(
-            session_id=self.DEFAULT_SESSION_ID,
-            runtime_coordinator=self.runtime_coordinator,
-            asr_adapter=self.asr_adapter,
+            on_features=self.asr_flush_trigger.consume_features
+            if self.asr_flush_trigger is not None
+            else None,
         )
         self._ensure_default_consumers()
 
@@ -169,6 +187,8 @@ class DebugSessionRunner:
 
         for event in scenario.pre_events:
             await collect(self.runtime_coordinator.process_event(event))
+            if self.asr_flush_trigger is not None:
+                await collect(await self.asr_flush_trigger.consume_event(event))
 
         if "ambience_scene" in scenario.metadata:
             controller = AmbienceController()
@@ -204,6 +224,8 @@ class DebugSessionRunner:
 
         for event in scenario.post_events:
             await collect(self.runtime_coordinator.process_event(event))
+            if self.asr_flush_trigger is not None:
+                await collect(await self.asr_flush_trigger.consume_event(event))
 
         final_state = self.runtime_coordinator.get_session_state(scenario.session_id)
         return DebugSessionResult(
@@ -220,6 +242,9 @@ class DebugSessionRunner:
                 "scenario": scenario.metadata,
                 "consumer_names": self.raw_audio_router.get_consumer_names(),
                 "route_summaries": route_summaries,
+                "asr_flush": self.asr_flush_trigger.get_status()
+                if self.asr_flush_trigger is not None
+                else None,
             },
         )
 
@@ -249,6 +274,10 @@ class DebugSessionRunner:
             return self._full_scenario(active_session_id)
         if name == "sfx":
             return self._sfx_scenario(active_session_id)
+        if name == "turn_final":
+            return self._turn_final_scenario(active_session_id)
+        if name == "short_utterance":
+            return self._short_utterance_scenario(active_session_id)
         if name == "scene":
             return self._scene_scenario(active_session_id)
         if name == "ambience":
@@ -264,6 +293,11 @@ class DebugSessionRunner:
             )
         if "asr" not in names:
             self.raw_audio_router.add_consumer("asr", self.asr_trigger.consume)
+        if "asr_flush" not in names and self.asr_flush_trigger is not None:
+            self.raw_audio_router.add_consumer(
+                "asr_flush",
+                self.asr_flush_trigger.consume_frame,
+            )
 
     def _backchannel_scenario(self, session_id: str) -> DebugScenario:
         return DebugScenario(
@@ -392,6 +426,43 @@ class DebugSessionRunner:
             post_events=[
                 Event(session_id=session_id, type=USER_SPEECH_END),
             ],
+        )
+
+    def _turn_final_scenario(self, session_id: str) -> DebugScenario:
+        return DebugScenario(
+            name="turn_final",
+            session_id=session_id,
+            description="Short ASR partial followed by silence that flushes a turn-final result.",
+            frames=[
+                DebugFrameSpec(
+                    timestamp_ms=1000,
+                    pcm_kind="speech",
+                    metadata={"asr_text": "我想测试一下", "asr_final": False},
+                ),
+                DebugFrameSpec(
+                    timestamp_ms=1900,
+                    pcm_kind="silence",
+                    metadata={
+                        "force_is_speaking": False,
+                        "force_pause_ms": 800,
+                    },
+                ),
+            ],
+        )
+
+    def _short_utterance_scenario(self, session_id: str) -> DebugScenario:
+        return DebugScenario(
+            name="short_utterance",
+            session_id=session_id,
+            description="Short ASR partial flushed explicitly by USER_SPEECH_END.",
+            frames=[
+                DebugFrameSpec(
+                    timestamp_ms=1000,
+                    pcm_kind="speech",
+                    metadata={"asr_text": "短句测试", "asr_final": False},
+                )
+            ],
+            post_events=[Event(session_id=session_id, type=USER_SPEECH_END)],
         )
 
     def _scene_scenario(self, session_id: str) -> DebugScenario:

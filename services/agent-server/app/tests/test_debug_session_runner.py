@@ -64,6 +64,7 @@ def test_debug_session_runner_defaults_register_consumers() -> None:
     assert runner.asr_trigger is not None
     assert set(runner.raw_audio_router.get_consumer_names()) == {
         "asr",
+        "asr_flush",
         "backchannel",
     }
 
@@ -160,6 +161,25 @@ def test_full_scenario_returns_json_serializable_summary() -> None:
     assert result.frames_processed > 0
     assert result.decision_count > 0
     assert json.loads(json.dumps(json_dict, ensure_ascii=False))["scenario"] == "full"
+
+
+def test_turn_final_scenario_flushes_asr_final() -> None:
+    runner = DebugSessionRunner()
+
+    result = runner.run_scenario_sync(runner.build_scenario("turn_final"))
+
+    assert result.frames_processed > 0
+    assert result.final_state["asr"]["final"] == "我想测试一下"
+    assert result.metadata["asr_flush"]["last_flush_reason"] == "silence"
+
+
+def test_short_utterance_scenario_flushes_on_user_speech_end() -> None:
+    runner = DebugSessionRunner()
+
+    result = runner.run_scenario_sync(runner.build_scenario("short_utterance"))
+
+    assert result.final_state["asr"]["final"] == "短句测试"
+    assert result.metadata["asr_flush"]["last_flush_reason"] == "user_speech_end"
 
 
 def test_sfx_scenario_generates_spatial_sfx_decision() -> None:

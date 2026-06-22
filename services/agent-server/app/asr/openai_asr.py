@@ -22,6 +22,7 @@ class OpenAIChunkedASRAdapter(BaseASRAdapter):
         self.config = config or ASRProviderConfig(provider="openai")
         self.client = client
         self.session_id: str | None = None
+        self.last_frame_session_id: str | None = None
         self.started = False
         self.closed = False
         self.buffer: list[AudioFrame] = []
@@ -42,6 +43,7 @@ class OpenAIChunkedASRAdapter(BaseASRAdapter):
     async def send_audio(self, frame: AudioFrame) -> list[ASRResult]:
         self._ensure_ready()
         self.buffer.append(frame)
+        self.last_frame_session_id = frame.session_id
         self.frames_sent += 1
         self.buffer_duration_ms = estimate_audio_duration_ms(self.buffer)
         if self.buffer_duration_ms < self.config.chunk_duration_ms:
@@ -147,7 +149,7 @@ class OpenAIChunkedASRAdapter(BaseASRAdapter):
         self.results_emitted += 1
         return [
             ASRResult(
-                session_id=self.session_id or "__openai__",
+                session_id=self.last_frame_session_id or self.session_id or "__openai__",
                 text=text,
                 is_final=True,
                 stability=1.0,

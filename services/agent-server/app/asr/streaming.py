@@ -25,6 +25,7 @@ class MockStreamingASRAdapter(BaseASRAdapter):
         self.final_after_frames = final_after_frames
         self.default_text = default_text
         self.session_id = ""
+        self.last_frame_session_id: str | None = None
         self.started = False
         self.closed = False
         self.frames_sent = 0
@@ -32,6 +33,7 @@ class MockStreamingASRAdapter(BaseASRAdapter):
         self.partials_emitted = 0
         self.finals_emitted = 0
         self.last_text: str | None = None
+        self.last_was_final = False
 
     async def start_stream(self, session_id: str) -> None:
         self.session_id = session_id
@@ -39,6 +41,7 @@ class MockStreamingASRAdapter(BaseASRAdapter):
 
     async def send_audio(self, frame: AudioFrame) -> list[ASRResult]:
         self.frames_sent += 1
+        self.last_frame_session_id = frame.session_id
         if self.queue:
             return self._emit([self._with_frame_defaults(self.queue.pop(0), frame)])
 
@@ -86,6 +89,17 @@ class MockStreamingASRAdapter(BaseASRAdapter):
     async def receive_results(self) -> list[ASRResult]:
         return []
 
+    async def flush(self) -> list[ASRResult]:
+        if not self.last_text or self.last_was_final:
+            return []
+        result = ASRResult(
+            session_id=self.last_frame_session_id or self.session_id or "__mock_streaming__",
+            text=self.last_text,
+            is_final=True,
+            provider=self.provider_name,
+        )
+        return self._emit([result])
+
     async def close(self) -> None:
         self.closed = True
 
@@ -111,6 +125,7 @@ class MockStreamingASRAdapter(BaseASRAdapter):
                 self.finals_emitted += 1
             else:
                 self.partials_emitted += 1
+            self.last_was_final = result.is_final
         return results
 
     def _with_frame_defaults(self, result: ASRResult, frame: AudioFrame) -> ASRResult:

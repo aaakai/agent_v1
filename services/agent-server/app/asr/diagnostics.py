@@ -23,6 +23,9 @@ class ASRDiagnostics(BaseModel):
     errors: list[dict[str, Any]] = Field(default_factory=list)
     frames_sent: int = 0
     results_emitted: int = 0
+    flush_count: int = 0
+    last_flush_reason: str | None = None
+    flushes: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ASRDiagnosticsStore:
@@ -76,6 +79,22 @@ class ASRDiagnosticsStore:
             }
         )
 
+    def record_flush(
+        self,
+        reason: str,
+        results_count: int,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        self._append(
+            {
+                "timestamp_ms": _now_ms(),
+                "type": "flush",
+                "reason": reason,
+                "results_count": results_count,
+                "metadata": dict(metadata or {}),
+            }
+        )
+
     def snapshot(
         self,
         status: ASRProviderStatus | None = None,
@@ -92,6 +111,11 @@ class ASRDiagnosticsStore:
             for event in self.events
             if event["type"] == "error"
         ][-20:]
+        flushes = [
+            event
+            for event in self.events
+            if event["type"] == "flush"
+        ][-20:]
         provider = status.provider if status else (config.normalized_provider() if config else "unknown")
         configured = status.configured if status else (config.is_configured() if config else False)
         diagnostics = ASRDiagnostics(
@@ -102,6 +126,9 @@ class ASRDiagnosticsStore:
             errors=errors,
             frames_sent=frames_sent,
             results_emitted=len(recent_results),
+            flush_count=len([event for event in self.events if event["type"] == "flush"]),
+            last_flush_reason=flushes[-1]["reason"] if flushes else None,
+            flushes=flushes,
         )
         data = diagnostics.model_dump(mode="python")
         if config is not None:
